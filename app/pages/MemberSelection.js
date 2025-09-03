@@ -140,11 +140,52 @@ export default function MemberSelection({
 }) {
   const [selectedMembers, setSelectedMembers] = useState(initialSelectedMemberIds);
   const [selectAll, setSelectAll] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [apiMembers, setApiMembers] = useState([]);
+
+  // Determine which members to show (API results or fallback to mock)
+  const membersToShow = apiMembers.length > 0 ? apiMembers : mockMembers;
+
+  // Fetch relevant members from API
+  useEffect(() => {
+    const fetchRelevantMembers = async () => {
+      if (!articleData.title) {
+        setLoading(false);
+        return;
+      }
+      
+      setLoading(true);
+      try {
+        const response = await fetch('/api/analyze-article', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(articleData)
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          setApiMembers(data.members);
+          toast.success('Found relevant industry contacts based on your article');
+        } else {
+          toast.error('Failed to analyze article and find relevant members');
+          setApiMembers(mockMembers);
+        }
+      } catch (error) {
+        console.error('API error:', error);
+        toast.error('Error connecting to analysis service, using default contacts');
+        setApiMembers(mockMembers);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRelevantMembers();
+  }, [articleData]);
 
   // Update selectAll state when selectedMembers changes
   useEffect(() => {
-    setSelectAll(selectedMembers.length === mockMembers.length);
-  }, [selectedMembers]);
+    setSelectAll(selectedMembers.length === membersToShow.length && membersToShow.length > 0);
+  }, [selectedMembers, membersToShow]);
 
   // Initialize selected members if coming back from next step
   useEffect(() => {
@@ -165,7 +206,7 @@ export default function MemberSelection({
     if (selectAll) {
       setSelectedMembers([]);
     } else {
-      setSelectedMembers(mockMembers.map(member => member.id));
+      setSelectedMembers(membersToShow.map(member => member.id));
     }
     setSelectAll(!selectAll);
   };
@@ -188,17 +229,30 @@ export default function MemberSelection({
     });
     
     // Pass selected member data to parent
-    const selectedMemberData = mockMembers.filter(member => 
+    const selectedMemberData = membersToShow.filter(member => 
       selectedMembers.includes(member.id)
     );
     
-    console.log("Selected members:", selectedMemberData); // Debug log
+    console.log("Selected members:", selectedMemberData);
     onContinue?.(selectedMemberData);
   };
 
   const handleBack = () => {
     onBack?.();
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6 flex items-center justify-center">
+        <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-3xl shadow-2xl p-12 text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-[#00DFB8] border-t-transparent rounded-full mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Analyzing your article...</h2>
+          <p className="text-gray-600">Finding the most relevant industry contacts</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6">
@@ -234,7 +288,10 @@ export default function MemberSelection({
               <div>
                 <h2 className="text-xl font-semibold text-gray-800 mb-2">Recommended contacts</h2>
                 <p className="text-gray-600 leading-relaxed">
-                  Based on your article content, we've identified these key industry contacts who would be most relevant for your communication.
+                  {apiMembers.length > 0 
+                    ? "Based on your article content, we've identified these key industry contacts who would be most relevant for your communication."
+                    : "Here are some industry contacts from our database. We'll improve recommendations with AI analysis soon."
+                  }
                 </p>
               </div>
               <div className="text-right">
@@ -256,18 +313,18 @@ export default function MemberSelection({
                   className="border-[#00DFB8]/30 data-[state=checked]:bg-[#00DFB8] data-[state=checked]:border-[#00DFB8]"
                 />
                 <label htmlFor="select-all" className="text-sm font-medium text-gray-700 cursor-pointer">
-                  Select all members ({mockMembers.length})
+                  Select all members ({membersToShow.length})
                 </label>
               </div>
               <Badge variant="outline" className="bg-white/50 border-[#00DFB8]/20">
                 <Users className="w-3 h-3 mr-1" />
-                {selectedMembers.length} of {mockMembers.length}
+                {selectedMembers.length} of {membersToShow.length}
               </Badge>
             </div>
 
             {/* Members Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              {mockMembers.map((member) => (
+              {membersToShow.map((member) => (
                 <div
                   key={member.id}
                   className={`relative p-6 bg-white/50 backdrop-blur-sm border rounded-xl cursor-pointer transition-all duration-300 group ${
@@ -331,6 +388,13 @@ export default function MemberSelection({
                           </Badge>
                         )}
                       </div>
+
+                      {/* Show reasoning if available from API */}
+                      {member.reasoning && (
+                        <div className="mt-2 p-2 bg-[#00DFB8]/5 rounded-lg">
+                          <p className="text-xs text-gray-600 italic">"{member.reasoning}"</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

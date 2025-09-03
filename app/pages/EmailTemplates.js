@@ -49,37 +49,31 @@ const TPAMailLogo = () => (
 );
 
 // Function to generate personalized email template
+// Updated function to generate commentary request email template
 const generateEmailTemplate = (member, articleData) => {
-  const { name, role, company, expertise } = member;
+  const { name } = member;
   const { title, synopsis } = articleData;
 
-  // This will be replaced with GPT API call
   return {
-    subject: `${title} - Insights for ${company}'s ${role}`,
-    body: `Dear ${name},
+    subject: `Industry commentary opportunity - ${title}`,
+    body: `Hi ${name},
 
-I hope this message finds you well. I'm writing to share an article that I believe would be particularly relevant to your work as ${role} at ${company}.
+I hope you're well
 
-**${title}**
+I'm a data journalist at The Payments Association - I'm writing to introduce myself and offer you the opportunity to provide commentary for my article on ${title}.
 
-${synopsis}
+The article ${synopsis}
 
-Given your expertise in ${expertise
-      .slice(0, 2)
-      .join(
-        " and "
-      )}, I thought this piece would be of particular interest to you. The insights around ${expertise[0].toLowerCase()} align closely with the innovative work ${company} has been doing in the payments space.
+For context: Article commentary is ~70 word statement which is included in the 'Industry Voices' section of our articles - along with the person's name, job title, and company - which are shared with our entire membership and through our social media channels.
 
-I'd welcome your thoughts on the perspectives shared in the article, particularly around how these developments might impact ${company}'s strategic direction.
+The deadline for commentary is **XXX**
 
-The full article is available for your review, and I'd be delighted to discuss any aspects that resonate with your current initiatives.
+Let me know if you would like any more information
 
-Best regards,
+Many thanks,
 
 [Your Name]
-The Payments Association
-
-P.S. If you'd like to discuss this further, I'm happy to arrange a brief call at your convenience.`,
+The Payments Association`
   };
 };
 
