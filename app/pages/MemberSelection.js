@@ -1,11 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, ArrowLeft, Users, Mail, Building2, Star, CheckCircle2, FileText, Globe, Briefcase } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowLeft,
+  Users,
+  Mail,
+  Building2,
+  Star,
+  CheckCircle2,
+  FileText,
+  Globe,
+  Briefcase,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const TPAMailLogo = () => (
@@ -28,81 +45,133 @@ const TPAMailLogo = () => (
   </div>
 );
 
+const mockCompanies = [
+  {
+    id: 999, // Use a different ID to distinguish from real data
+    company: "API Service Unavailable",
+    expertise: ["Payment Processing", "Digital Solutions"],
+    interests: ["Technology Innovation", "Financial Services"],
+    avatar: "API",
+    bio: "This is a fallback entry displayed when the article analysis service is unavailable. Please check your connection and try again.",
+    marketSegments: ["All Segments"],
+    geographicFocus: ["Global"],
+    solutionTypes: ["Fallback"],
+    deliveryModels: ["N/A"],
+    employeeCount: "N/A",
+    recentInitiatives: ["Service restoration"],
+    partnershipEcosystem: ["System maintenance"],
+    regulatoryExpertise: ["Standard compliance"],
+    industryRecognition: ["Fallback display"],
+    relevanceScore: 0,
+  },
+];
+
 export default function MemberSelection({
   articleData = {},
   onBack,
   onContinue,
-  initialSelectedCompanyIds = []
+  initialSelectedCompanyIds = [],
 }) {
-  const [selectedCompanies, setSelectedCompanies] = useState(initialSelectedCompanyIds);
-  const [selectAll, setSelectAll] = useState(false);
+  const [selectedCompanies, setSelectedCompanies] = useState(
+    initialSelectedCompanyIds
+  );
   const [loading, setLoading] = useState(true);
   const [apiCompanies, setApiCompanies] = useState([]);
 
-  // Mock data for demonstration
-  const mockCompanies = [
-    {
-      id: 1,
-      company: "ACI Worldwide",
-      expertise: ["Payment Orchestration", "Real-time Payments", "Fraud Management"],
-      interests: ["AI-driven routing", "Cross-border optimization", "Authorization rate improvement"],
-      bio: "Original innovator in global payments technology, delivers transformative software solutions that power intelligent payments orchestration in real time",
-      marketSegments: ["Enterprise", "Banks", "Merchants", "PSPs"],
-      geographicFocus: ["Global", "UK", "EU", "APAC"],
-      relevanceScore: 95
-    },
-    // Add other companies...
-  ];
+  // Use refs to track previous values and prevent unnecessary effects
+  const prevArticleDataRef = useRef();
+  const prevInitialSelectedRef = useRef();
+  const hasInitializedRef = useRef(false);
 
-  const companiesToShow = apiCompanies.length > 0 ? apiCompanies : mockCompanies;
+  // Memoize companiesToShow to prevent unnecessary re-renders
+  const companiesToShow = useMemo(() => {
+    return apiCompanies.length > 0 ? apiCompanies : mockCompanies;
+  }, [apiCompanies]);
+
+  // Calculate selectAll during render instead of in useEffect to avoid infinite loops
+  const selectAll = useMemo(() => {
+    return (
+      selectedCompanies.length === companiesToShow.length &&
+      companiesToShow.length > 0
+    );
+  }, [selectedCompanies.length, companiesToShow.length]);
+
+  // Stabilize articleData using deep comparison of key properties
+  const stableArticleData = useMemo(() => {
+    return {
+      title: articleData?.title || "",
+      synopsis: articleData?.synopsis || "",
+      fullArticle: articleData?.fullArticle || "",
+    };
+  }, [articleData?.title, articleData?.synopsis, articleData?.fullArticle]);
 
   useEffect(() => {
     const fetchRelevantCompanies = async () => {
-      if (!articleData.title) {
+      // Check if we've already fetched or if the article data hasn't really changed
+      if (
+        !stableArticleData.title ||
+        (prevArticleDataRef.current &&
+          prevArticleDataRef.current.title === stableArticleData.title &&
+          prevArticleDataRef.current.synopsis === stableArticleData.synopsis &&
+          prevArticleDataRef.current.fullArticle ===
+            stableArticleData.fullArticle)
+      ) {
         setLoading(false);
         return;
       }
-      
+
+      prevArticleDataRef.current = stableArticleData;
       setLoading(true);
+
       try {
-        const response = await fetch('/api/analyze-article', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(articleData)
+        const response = await fetch("/api/analyze-article", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(stableArticleData),
         });
-        
+
         const data = await response.json();
         if (data.success) {
           setApiCompanies(data.members);
-          toast.success('Found relevant companies based on your article');
+          toast.success("Found relevant companies based on your article");
         } else {
-          toast.error('Failed to analyze article and find relevant companies');
-          setApiCompanies(mockCompanies);
+          toast.error("Failed to analyze article and find relevant companies");
+          setApiCompanies([]);
         }
       } catch (error) {
-        console.error('API error:', error);
-        toast.error('Error connecting to analysis service, using default companies');
-        setApiCompanies(mockCompanies);
+        console.error("API error:", error);
+        toast.error(
+          "Error connecting to analysis service, using default companies"
+        );
+        setApiCompanies([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchRelevantCompanies();
-  }, [articleData]);
+  }, [
+    stableArticleData.title,
+    stableArticleData.synopsis,
+    stableArticleData.fullArticle,
+  ]);
 
   useEffect(() => {
-    setSelectAll(selectedCompanies.length === companiesToShow.length && companiesToShow.length > 0);
-  }, [selectedCompanies, companiesToShow]);
+    // Only update if the array actually changed (not just reference)
+    const currentIds = JSON.stringify(initialSelectedCompanyIds);
+    const prevIds = JSON.stringify(prevInitialSelectedRef.current);
 
-  useEffect(() => {
-    setSelectedCompanies(initialSelectedCompanyIds);
+    if (!hasInitializedRef.current || currentIds !== prevIds) {
+      setSelectedCompanies(initialSelectedCompanyIds);
+      prevInitialSelectedRef.current = initialSelectedCompanyIds;
+      hasInitializedRef.current = true;
+    }
   }, [initialSelectedCompanyIds]);
 
   const handleCompanySelect = (companyId) => {
-    setSelectedCompanies(prev => {
+    setSelectedCompanies((prev) => {
       if (prev.includes(companyId)) {
-        return prev.filter(id => id !== companyId);
+        return prev.filter((id) => id !== companyId);
       } else {
         return [...prev, companyId];
       }
@@ -113,9 +182,8 @@ export default function MemberSelection({
     if (selectAll) {
       setSelectedCompanies([]);
     } else {
-      setSelectedCompanies(companiesToShow.map(company => company.id));
+      setSelectedCompanies(companiesToShow.map((company) => company.id));
     }
-    setSelectAll(!selectAll);
   };
 
   const getRelevanceColor = (score) => {
@@ -129,16 +197,16 @@ export default function MemberSelection({
       toast.error("Please select at least one company to contact");
       return;
     }
-    
+
     toast.success(`${selectedCompanies.length} companies selected`, {
       description: "Proceeding to compose messages",
       duration: 3000,
     });
-    
-    const selectedCompanyData = companiesToShow.filter(company => 
+
+    const selectedCompanyData = companiesToShow.filter((company) =>
       selectedCompanies.includes(company.id)
     );
-    
+
     onContinue?.(selectedCompanyData);
   };
 
@@ -151,8 +219,12 @@ export default function MemberSelection({
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6 flex items-center justify-center">
         <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-3xl shadow-2xl p-12 text-center">
           <div className="animate-spin w-8 h-8 border-2 border-[#00DFB8] border-t-transparent rounded-full mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Analyzing your article...</h2>
-          <p className="text-gray-600">Finding the most relevant companies for commentary</p>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Finding members you need to contact...
+          </h2>
+          <p className="text-gray-600">
+            Identifying the most relevant companies for commentary
+          </p>
         </div>
       </div>
     );
@@ -161,44 +233,50 @@ export default function MemberSelection({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6">
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
-      
+
       <div className="relative max-w-6xl mx-auto">
         <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-3xl shadow-2xl shadow-teal-500/10 overflow-hidden">
           <div className="bg-gradient-to-r from-white/80 via-white/60 to-white/80 backdrop-blur-sm border-b border-white/20 p-8">
             <TPAMailLogo />
-            
-            {articleData.title && (
+
+            {stableArticleData.title && (
               <div className="mb-4 p-3 bg-white/30 backdrop-blur-sm border border-white/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <FileText className="w-4 h-4 text-[#00DFB8]" />
-                  <span className="text-sm font-medium text-gray-700">Article: "{articleData.title}"</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Article: "{stableArticleData.title}"
+                  </span>
                 </div>
-                {articleData.synopsis && (
+                {stableArticleData.synopsis && (
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    {articleData.synopsis.length > 120 
-                      ? `${articleData.synopsis.substring(0, 120)}...` 
-                      : articleData.synopsis
-                    }
+                    {stableArticleData.synopsis.length > 120
+                      ? `${stableArticleData.synopsis.substring(0, 120)}...`
+                      : stableArticleData.synopsis}
                   </p>
                 )}
               </div>
             )}
-            
+
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-800 mb-2">Recommended companies</h2>
+                <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                  Recommended companies
+                </h2>
                 <p className="text-gray-600 leading-relaxed">
-                  Based on your article content, we've identified these companies who would be most relevant for commentary. 
-                  You'll need to identify specific contacts within these organisations.
+                  Based on your article content, we've identified these
+                  companies who would be most relevant for commentary. You'll
+                  need to identify specific contacts within these organisations.
                 </p>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-[#00DFB8]">{selectedCompanies.length}</div>
+                <div className="text-2xl font-bold text-[#00DFB8]">
+                  {selectedCompanies.length}
+                </div>
                 <div className="text-sm text-gray-500">selected</div>
               </div>
             </div>
           </div>
-          
+
           <div className="p-8">
             <div className="flex items-center justify-between mb-6 p-4 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl">
               <div className="flex items-center gap-3">
@@ -208,11 +286,17 @@ export default function MemberSelection({
                   onCheckedChange={handleSelectAll}
                   className="border-[#00DFB8]/30 data-[state=checked]:bg-[#00DFB8] data-[state=checked]:border-[#00DFB8]"
                 />
-                <label htmlFor="select-all" className="text-sm font-medium text-gray-700 cursor-pointer">
+                <label
+                  htmlFor="select-all"
+                  className="text-sm font-medium text-gray-700 cursor-pointer"
+                >
                   Select all companies ({companiesToShow.length})
                 </label>
               </div>
-              <Badge variant="outline" className="bg-white/50 border-[#00DFB8]/20">
+              <Badge
+                variant="outline"
+                className="bg-white/50 border-[#00DFB8]/20"
+              >
                 <Building2 className="w-3 h-3 mr-1" />
                 {selectedCompanies.length} of {companiesToShow.length}
               </Badge>
@@ -224,17 +308,19 @@ export default function MemberSelection({
                   key={company.id}
                   className={`relative p-6 bg-white/50 backdrop-blur-sm border rounded-xl cursor-pointer transition-all duration-300 group ${
                     selectedCompanies.includes(company.id)
-                      ? 'border-[#00DFB8]/40 bg-[#00DFB8]/5 shadow-lg'
-                      : 'border-white/30 hover:border-[#00DFB8]/20 hover:bg-white/70'
+                      ? "border-[#00DFB8]/40 bg-[#00DFB8]/5 shadow-lg"
+                      : "border-white/30 hover:border-[#00DFB8]/20 hover:bg-white/70"
                   }`}
                   onClick={() => handleCompanySelect(company.id)}
                 >
                   <div className="absolute top-4 right-4">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      selectedCompanies.includes(company.id)
-                        ? 'bg-[#00DFB8] border-[#00DFB8]'
-                        : 'border-gray-300 group-hover:border-[#00DFB8]/50'
-                    }`}>
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        selectedCompanies.includes(company.id)
+                          ? "bg-[#00DFB8] border-[#00DFB8]"
+                          : "border-gray-300 group-hover:border-[#00DFB8]/50"
+                      }`}
+                    >
                       {selectedCompanies.includes(company.id) && (
                         <CheckCircle2 className="w-3 h-3 text-white" />
                       )}
@@ -247,62 +333,79 @@ export default function MemberSelection({
                     </div>
 
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-800 mb-1">{company.company}</h3>
-                      
+                      <h3 className="font-semibold text-gray-800 mb-1">
+                        {company.company}
+                      </h3>
+
                       {company.relevanceScore && (
                         <div className="flex items-center gap-2 mb-3">
                           <Star className="w-3 h-3 text-[#00DFB8]" />
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${getRelevanceColor(company.relevanceScore)}`}>
+                          <span
+                            className={`text-xs font-medium px-2 py-1 rounded-full ${getRelevanceColor(
+                              company.relevanceScore
+                            )}`}
+                          >
                             {company.relevanceScore}% match
                           </span>
                         </div>
                       )}
 
+                      {/* Replace the existing expertise badges section with this safer version: */}
                       <div className="flex flex-wrap gap-1 mb-3">
-                        {company.expertise.slice(0, 3).map((skill, index) => (
+                        {(company.expertise || [])
+                          .slice(0, 3)
+                          .map((skill, index) => (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className="text-xs bg-white/50 border-[#00DFB8]/20 text-gray-600"
+                            >
+                              {skill}
+                            </Badge>
+                          ))}
+                        {(company.expertise || []).length > 3 && (
                           <Badge
-                            key={index}
                             variant="outline"
-                            className="text-xs bg-white/50 border-[#00DFB8]/20 text-gray-600"
+                            className="text-xs bg-white/50 border-gray-200"
                           >
-                            {skill}
-                          </Badge>
-                        ))}
-                        {company.expertise.length > 3 && (
-                          <Badge variant="outline" className="text-xs bg-white/50 border-gray-200">
-                            +{company.expertise.length - 3}
+                            +{(company.expertise || []).length - 3}
                           </Badge>
                         )}
                       </div>
 
-                      {company.marketSegments && (
-                        <div className="flex items-center gap-2 mb-2">
-                          <Briefcase className="w-3 h-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">
-                            {company.marketSegments.slice(0, 3).join(', ')}
-                          </span>
-                        </div>
-                      )}
+                      {company.marketSegments &&
+                        company.marketSegments.length > 0 && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <Briefcase className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              {company.marketSegments.slice(0, 3).join(", ")}
+                            </span>
+                          </div>
+                        )}
 
-                      {company.geographicFocus && (
-                        <div className="flex items-center gap-2 mb-3">
-                          <Globe className="w-3 h-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">
-                            {company.geographicFocus.slice(0, 3).join(', ')}
-                          </span>
-                        </div>
-                      )}
+                      {company.geographicFocus &&
+                        company.geographicFocus.length > 0 && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <Globe className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              {company.geographicFocus.slice(0, 3).join(", ")}
+                            </span>
+                          </div>
+                        )}
 
                       <p className="text-xs text-gray-600 leading-relaxed">
-                        {company.bio.length > 100 
-                          ? `${company.bio.substring(0, 100)}...` 
-                          : company.bio
-                        }
+                        {company?.bio &&
+                        typeof company.bio === "string" &&
+                        company.bio.length > 100
+                          ? `${company.bio.substring(0, 100)}...`
+                          : company?.bio || "No description available"}
                       </p>
 
                       {company.reasoning && (
                         <div className="mt-2 p-2 bg-[#00DFB8]/5 rounded-lg">
-                          <p className="text-xs text-gray-600 italic">"{company.reasoning}"</p>
+                          <p className="text-xs text-gray-600 italic">
+                            "{company.reasoning}"
+                          </p>
                         </div>
                       )}
                     </div>
@@ -312,7 +415,7 @@ export default function MemberSelection({
             </div>
 
             <div className="flex justify-between items-center pt-6 border-t border-white/20">
-              <Button 
+              <Button
                 variant="outline"
                 onClick={handleBack}
                 className="px-6 bg-white/50 backdrop-blur-sm border-white/30 hover:bg-white/70"
@@ -320,15 +423,16 @@ export default function MemberSelection({
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to article
               </Button>
-              
-              <Button 
-                size="lg" 
+
+              <Button
+                size="lg"
                 onClick={handleContinue}
                 disabled={selectedCompanies.length === 0}
                 className="px-8 py-3 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] hover:from-[#00B894] hover:via-[#00A085] hover:to-[#008B73] text-white border-0 rounded-xl shadow-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 group"
               >
                 <span className="flex items-center gap-2">
-                  Continue with {selectedCompanies.length} {selectedCompanies.length === 1 ? 'company' : 'companies'}
+                  Continue with {selectedCompanies.length}{" "}
+                  {selectedCompanies.length === 1 ? "company" : "companies"}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </span>
               </Button>
