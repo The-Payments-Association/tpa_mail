@@ -1,8 +1,8 @@
-import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 import { membersDatabase } from '../../lib/membersDatabase';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 export default async function handler(req, res) {
@@ -24,16 +24,24 @@ export default async function handler(req, res) {
       interests: member.interests.join(', ')
     }));
 
-    const systemPrompt = `You are an expert in the payments and fintech industry. Analyze articles and identify relevant industry contacts for commentary requests.
+    const model = genAI.models.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      config: {
+        temperature: 0.3,
+        response_format: { type: "json_object" }
+      }
+    });
+
+    const prompt = `You are an expert in the payments and fintech industry. Analyze articles and identify relevant industry contacts for commentary requests.
 
 Your task:
 1. Analyze article content for key themes and technologies
 2. Match against member database
 3. Return 10 most relevant members with scores and reasoning
 
-Focus on thought leadership potential, not sales targets.`;
+Focus on thought leadership potential, not sales targets.
 
-    const userPrompt = `Analyze this article for industry commentary opportunities:
+Analyze this article for industry commentary opportunities:
 
 **Title:** ${title}
 **Synopsis:** ${synopsis}
@@ -43,17 +51,12 @@ Focus on thought leadership potential, not sales targets.`;
 
 Return JSON: {"recommendations": [{"id": 1, "relevanceScore": 85, "reasoning": "Expert in relevant area..."}]}`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5-nano", // Updated to cheapest model
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.3,
-      response_format: { type: "json_object" }
+    const result = await model.generateContent({
+      contents: [{ parts: [{ text: prompt }] }]
     });
 
-    const recommendations = JSON.parse(completion.choices[0].message.content);
+    const response = result.response;
+    const recommendations = JSON.parse(response.text());
     
     const enrichedRecommendations = recommendations.recommendations.map(rec => {
       const member = membersDatabase.find(m => m.id === rec.id);
@@ -70,7 +73,7 @@ Return JSON: {"recommendations": [{"id": 1, "relevanceScore": 85, "reasoning": "
     });
 
   } catch (error) {
-    console.error('OpenAI API error:', error);
+    console.error('Gemini API error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to analyze article and find relevant members' 
