@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -15,16 +17,17 @@ import {
   ArrowRight,
   ArrowLeft,
   Mail,
-  Users,
+  Building2,
   FileText,
   Edit3,
   Eye,
   Send,
-  Building2,
   Copy,
   Check,
   ChevronLeft,
   ChevronRight,
+  User,
+  AtSign,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,21 +51,19 @@ const TPAMailLogo = () => (
   </div>
 );
 
-// Function to generate personalized email template
-// Updated function to generate commentary request email template
-const generateEmailTemplate = (member, articleData) => {
-  const { name } = member;
-  const { title, synopsis } = articleData;
-
+// Updated function to generate company-focused email template
+const generateCompanyEmailTemplate = (company, articleData) => {
   return {
-    subject: `Industry commentary opportunity - ${title}`,
-    body: `Hi ${name},
+    subject: `Commentary opportunity - ${articleData.title}`,
+    body: `Hi [CONTACT NAME],
 
 I hope you're well
 
-I'm a data journalist at The Payments Association - I'm writing to introduce myself and offer you the opportunity to provide commentary for my article on ${title}.
+I'm a data journalist at The Payments Association - I'm writing to introduce myself and offer you the opportunity to provide commentary for my article on ${articleData.title}.
 
-The article ${synopsis}
+The article [ARTICLE SUMMARY TO BE ADDED]
+
+Given ${company.company}'s expertise in ${company.expertise.slice(0, 2).join(' and ')}, your perspective would be particularly valuable for our readers.
 
 For context: Article commentary is ~70 word statement which is included in the 'Industry Voices' section of our articles - along with the person's name, job title, and company - which are shared with our entire membership and through our social media channels.
 
@@ -79,15 +80,18 @@ The Payments Association`
 
 export default function EmailTemplates({
   articleData = {},
-  selectedMembers = [],
+  selectedCompanies = [],
   onBack,
   onContinue,
 }) {
   const [emailTemplates, setEmailTemplates] = useState(() =>
-    selectedMembers.map((member) => ({
-      memberId: member.id,
-      member,
-      template: generateEmailTemplate(member, articleData),
+    selectedCompanies.map((company) => ({
+      companyId: company.id,
+      company,
+      contactName: "",
+      contactRole: "",
+      contactEmail: "",
+      template: generateCompanyEmailTemplate(company, articleData),
       isEdited: false,
       isApproved: false,
     }))
@@ -95,6 +99,7 @@ export default function EmailTemplates({
 
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
   const [copiedField, setCopiedField] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const currentTemplate = emailTemplates[currentEmailIndex];
   const totalEmails = emailTemplates.length;
@@ -113,6 +118,63 @@ export default function EmailTemplates({
     );
   };
 
+  const updateContactInfo = (field, value) => {
+    setEmailTemplates((prev) =>
+      prev.map((template, index) =>
+        index === currentEmailIndex
+          ? {
+              ...template,
+              [field]: value,
+              isEdited: true,
+            }
+          : template
+      )
+    );
+  };
+
+  const generateAIEmails = async () => {
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/generate-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articleData,
+          selectedMembers: selectedCompanies // Pass companies as members
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setEmailTemplates(prev =>
+          prev.map(template => {
+            const aiTemplate = data.emails.find(email => email.memberId === template.companyId);
+            if (aiTemplate) {
+              return {
+                ...template,
+                template: aiTemplate.template,
+                isEdited: true
+              };
+            }
+            return template;
+          })
+        );
+        toast.success("AI-generated emails created!", {
+          description: `Generated ${data.emails.length} personalised templates`,
+          duration: 3000,
+        });
+      } else {
+        toast.error("Failed to generate AI emails");
+      }
+    } catch (error) {
+      console.error('Email generation error:', error);
+      toast.error("Error generating emails");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const copyToClipboard = async (text, fieldName) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -125,7 +187,6 @@ export default function EmailTemplates({
   };
 
   const handleApproveEmail = () => {
-    // Mark current email as approved
     setEmailTemplates((prev) =>
       prev.map((template, index) =>
         index === currentEmailIndex
@@ -134,12 +195,10 @@ export default function EmailTemplates({
       )
     );
 
-    // Move to next email or finish if this was the last one
     if (currentEmailIndex < totalEmails - 1) {
       setCurrentEmailIndex(currentEmailIndex + 1);
       toast.success("Email approved! Moving to next...");
     } else {
-      // All emails reviewed
       toast.success("All emails reviewed!", {
         description: "Ready to proceed to final step",
         duration: 3000,
@@ -191,17 +250,13 @@ export default function EmailTemplates({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6">
-      {/* Background Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
 
       <div className="relative max-w-7xl mx-auto">
-        {/* Main Glass Card */}
         <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-3xl shadow-2xl shadow-teal-500/10 overflow-hidden">
-          {/* Header */}
           <div className="bg-gradient-to-r from-white/80 via-white/60 to-white/80 backdrop-blur-sm border-b border-white/20 p-8">
             <TPAMailLogo />
 
-            {/* Article Context */}
             {articleData.title && (
               <div className="mb-4 p-3 bg-white/30 backdrop-blur-sm border border-white/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
@@ -219,8 +274,7 @@ export default function EmailTemplates({
                   Review email templates
                 </h2>
                 <p className="text-gray-600 leading-relaxed">
-                  Review each personalised email template. Copy, edit as needed,
-                  then approve to continue.
+                  Review and customise each company-focused email template. Add contact details after identifying the right person at each organisation.
                 </p>
               </div>
               <div className="text-right">
@@ -232,7 +286,6 @@ export default function EmailTemplates({
             </div>
           </div>
 
-          {/* Content */}
           <div className="p-8">
             {/* Progress Bar */}
             <div className="mb-8">
@@ -240,9 +293,18 @@ export default function EmailTemplates({
                 <span className="text-sm font-medium text-gray-700">
                   Email {currentEmailIndex + 1} of {totalEmails}
                 </span>
-                <span className="text-sm text-gray-500">
-                  {Math.round((approvedCount / totalEmails) * 100)}% complete
-                </span>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={generateAIEmails}
+                    disabled={isGenerating}
+                    className="h-7 px-3 bg-gradient-to-r from-[#00DFB8] to-[#00B894] hover:from-[#00B894] hover:to-[#00A085] text-white border-0"
+                  >
+                    {isGenerating ? "Generating..." : "🤖 AI Generate All"}
+                  </Button>
+                  <span className="text-sm text-gray-500">
+                    {Math.round((approvedCount / totalEmails) * 100)}% complete
+                  </span>
+                </div>
               </div>
               <div className="w-full bg-white/40 rounded-full h-2 backdrop-blur-sm">
                 <div
@@ -252,56 +314,75 @@ export default function EmailTemplates({
               </div>
             </div>
 
-            {/* Email Review Interface */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Member Info Sidebar */}
+              {/* Company Info Sidebar */}
               <div className="lg:col-span-1">
                 <Card className="bg-white/50 backdrop-blur-sm border-white/30 sticky top-8">
                   <CardHeader className="pb-4">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-12 h-12 bg-gradient-to-br from-[#00DFB8] to-[#00B894] rounded-xl flex items-center justify-center text-white font-semibold">
-                        {currentTemplate.member.avatar}
+                        {currentTemplate.company.company.substring(0, 2).toUpperCase()}
                       </div>
                       <div>
                         <CardTitle className="text-lg">
-                          {currentTemplate.member.name}
+                          {currentTemplate.company.company}
                         </CardTitle>
                         <CardDescription className="text-sm">
-                          {currentTemplate.member.role}
+                          {currentTemplate.company.employeeCount} employees
                         </CardDescription>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mb-3">
-                      <Building2 className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">
-                        {currentTemplate.member.company}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-4">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">
-                        {currentTemplate.member.email}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-3 mb-4">
                       <h4 className="text-sm font-semibold text-gray-700">
-                        Expertise
+                        Expertise Areas
                       </h4>
                       <div className="flex flex-wrap gap-1">
-                        {currentTemplate.member.expertise.map(
-                          (skill, index) => (
-                            <Badge
-                              key={index}
-                              variant="outline"
-                              className="text-xs bg-white/50 border-[#00DFB8]/20 text-gray-600"
-                            >
-                              {skill}
-                            </Badge>
-                          )
-                        )}
+                        {currentTemplate.company.expertise.map((skill, index) => (
+                          <Badge
+                            key={index}
+                            variant="outline"
+                            className="text-xs bg-white/50 border-[#00DFB8]/20 text-gray-600"
+                          >
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700">Contact Details</h4>
+                      <div className="space-y-2">
+                        <div>
+                          <Label htmlFor="contact-name" className="text-xs">Contact Name</Label>
+                          <Input
+                            id="contact-name"
+                            placeholder="e.g. John Smith"
+                            value={currentTemplate.contactName}
+                            onChange={(e) => updateContactInfo('contactName', e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="contact-role" className="text-xs">Role/Title</Label>
+                          <Input
+                            id="contact-role"
+                            placeholder="e.g. Head of Payments"
+                            value={currentTemplate.contactRole}
+                            onChange={(e) => updateContactInfo('contactRole', e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="contact-email" className="text-xs">Email Address</Label>
+                          <Input
+                            id="contact-email"
+                            placeholder="e.g. john.smith@company.com"
+                            value={currentTemplate.contactEmail}
+                            onChange={(e) => updateContactInfo('contactEmail', e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -453,6 +534,19 @@ export default function EmailTemplates({
                   </div>
                 </div>
 
+                {/* Fields to Fill Warning */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-yellow-800 mb-2">
+                    📝 Remember to update:
+                  </h4>
+                  <ul className="text-sm text-yellow-700 space-y-1">
+                    <li>• [CONTACT NAME] - Add specific contact name</li>
+                    <li>• [ARTICLE SUMMARY TO BE ADDED] - Add concise article summary</li>
+                    <li>• **XXX** - Add specific deadline date</li>
+                    <li>• [Your Name] - Add your name</li>
+                  </ul>
+                </div>
+
                 {/* Approve Button */}
                 <div className="flex justify-end">
                   {currentTemplate.isApproved ? (
@@ -481,7 +575,7 @@ export default function EmailTemplates({
                 className="px-6 bg-white/50 backdrop-blur-sm border-white/30 hover:bg-white/70"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to members
+                Back to companies
               </Button>
 
               <Button
