@@ -15,7 +15,8 @@ import {
   Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
-import LoadingOverlay from "./LoadingOverlay"; // Import the new component
+import LoadingOverlay from "./LoadingOverlay";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TPAMailLogo = () => (
   <div className="flex items-center gap-4 mb-6">
@@ -54,8 +55,8 @@ const mockCompanies = [
     partnershipEcosystem: ["System maintenance"],
     regulatoryExpertise: ["Standard compliance"],
     industryRecognition: ["Fallback display"],
-    relevanceScore: 0
-  }
+    relevanceScore: 0,
+  },
 ];
 
 export default function MemberSelection({
@@ -64,7 +65,9 @@ export default function MemberSelection({
   onContinue,
   initialSelectedCompanyIds = [],
 }) {
-  const [selectedCompanies, setSelectedCompanies] = useState(initialSelectedCompanyIds);
+  const [selectedCompanies, setSelectedCompanies] = useState(
+    initialSelectedCompanyIds
+  );
   const [loading, setLoading] = useState(false);
   const [apiCompanies, setApiCompanies] = useState([]);
 
@@ -103,10 +106,12 @@ export default function MemberSelection({
       }
 
       // Check if we've already fetched this exact data
-      if (prevArticleDataRef.current &&
-          prevArticleDataRef.current.title === stableArticleData.title &&
-          prevArticleDataRef.current.synopsis === stableArticleData.synopsis &&
-          prevArticleDataRef.current.fullArticle === stableArticleData.fullArticle) {
+      if (
+        prevArticleDataRef.current &&
+        prevArticleDataRef.current.title === stableArticleData.title &&
+        prevArticleDataRef.current.synopsis === stableArticleData.synopsis &&
+        prevArticleDataRef.current.fullArticle === stableArticleData.fullArticle
+      ) {
         return;
       }
 
@@ -115,33 +120,35 @@ export default function MemberSelection({
       prevArticleDataRef.current = stableArticleData;
 
       try {
-        console.log('📤 Starting API call...');
-        
+        console.log("📤 Starting API call...");
+
         const response = await fetch("/api/analyze-article", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(stableArticleData),
         });
 
-        console.log('📥 API response received:', response.status);
+        console.log("📥 API response received:", response.status);
 
         const data = await response.json();
-        console.log('📄 API data:', data);
+        console.log("📄 API data:", data);
 
         if (data.success && Array.isArray(data.members)) {
           setApiCompanies(data.members);
           toast.success("Found relevant companies based on your article");
         } else {
-          console.warn('API returned unsuccessful response:', data);
+          console.warn("API returned unsuccessful response:", data);
           toast.error("Failed to analyze article and find relevant companies");
           setApiCompanies([]);
         }
       } catch (error) {
         console.error("API error:", error);
-        toast.error("Error connecting to analysis service, using default companies");
+        toast.error(
+          "Error connecting to analysis service, using default companies"
+        );
         setApiCompanies([]);
       }
-      
+
       // Note: We don't set loading to false here anymore - the LoadingOverlay component handles it
     };
 
@@ -218,12 +225,15 @@ export default function MemberSelection({
   return (
     <>
       {/* Loading Overlay Component */}
-      <LoadingOverlay 
+      <LoadingOverlay
         isVisible={loading}
         title="Finding members you need to contact..."
         subtitle="Identifying the most relevant companies for commentary"
         forcedDuration={10000} // 10 seconds
       />
+      <div className="fixed top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>
 
       {/* Main Content */}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6">
@@ -261,7 +271,8 @@ export default function MemberSelection({
                   <p className="text-gray-600 leading-relaxed">
                     Based on your article content, we've identified these
                     companies who would be most relevant for commentary. You'll
-                    need to identify specific contacts within these organisations.
+                    need to identify specific contacts within these
+                    organisations.
                   </p>
                 </div>
                 <div className="text-right">
@@ -336,18 +347,19 @@ export default function MemberSelection({
                           {company.company}
                         </h3>
 
-                        {company.relevanceScore && company.relevanceScore > 0 && (
-                          <div className="flex items-center gap-2 mb-3">
-                            <Star className="w-3 h-3 text-[#00DFB8]" />
-                            <span
-                              className={`text-xs font-medium px-2 py-1 rounded-full ${getRelevanceColor(
-                                company.relevanceScore
-                              )}`}
-                            >
-                              {company.relevanceScore}% match
-                            </span>
-                          </div>
-                        )}
+                        {company.relevanceScore &&
+                          company.relevanceScore > 0 && (
+                            <div className="flex items-center gap-2 mb-3">
+                              <Star className="w-3 h-3 text-[#00DFB8]" />
+                              <span
+                                className={`text-xs font-medium px-2 py-1 rounded-full ${getRelevanceColor(
+                                  company.relevanceScore
+                                )}`}
+                              >
+                                {company.relevanceScore}% match
+                              </span>
+                            </div>
+                          )}
 
                         <div className="flex flex-wrap gap-1 mb-3">
                           {(company.expertise || [])
@@ -392,10 +404,11 @@ export default function MemberSelection({
                           )}
 
                         <p className="text-xs text-gray-600 leading-relaxed">
-                          {company?.bio && typeof company.bio === 'string' && company.bio.length > 100
+                          {company?.bio &&
+                          typeof company.bio === "string" &&
+                          company.bio.length > 100
                             ? `${company.bio.substring(0, 100)}...`
-                            : (company?.bio || 'No description available')
-                          }
+                            : company?.bio || "No description available"}
                         </p>
 
                         {company.reasoning && (
