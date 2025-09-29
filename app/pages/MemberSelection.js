@@ -13,6 +13,7 @@ import {
   FileText,
   Globe,
   Briefcase,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import LoadingOverlay from "./LoadingOverlay";
@@ -24,16 +25,18 @@ const TPAMailLogo = () => (
       <div className="absolute -inset-1 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
       <div className="relative w-12 h-12 bg-gradient-to-br from-[#00DFB8] to-[#00B894] rounded-xl flex items-center justify-center shadow-lg">
         <Building2 className="w-6 h-6 text-white" />
-        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full border-2 border-white dark:border-slate-800 shadow-lg flex items-center justify-center">
           <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
         </div>
       </div>
     </div>
     <div>
-      <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+      <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400 bg-clip-text text-transparent">
         TPA Mail
       </h1>
-      <p className="text-xs text-gray-500">The Payments Association</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        The Payments Association
+      </p>
     </div>
   </div>
 );
@@ -70,18 +73,16 @@ export default function MemberSelection({
   );
   const [loading, setLoading] = useState(false);
   const [apiCompanies, setApiCompanies] = useState([]);
+  const [quotaWarning, setQuotaWarning] = useState(null);
 
-  // Use refs to track previous values and prevent unnecessary effects
   const prevArticleDataRef = useRef();
   const prevInitialSelectedRef = useRef();
   const hasInitializedRef = useRef(false);
 
-  // Memoize companiesToShow to prevent unnecessary re-renders
   const companiesToShow = useMemo(() => {
     return apiCompanies.length > 0 ? apiCompanies : mockCompanies;
   }, [apiCompanies]);
 
-  // Calculate selectAll during render instead of in useEffect to avoid infinite loops
   const selectAll = useMemo(() => {
     return (
       selectedCompanies.length === companiesToShow.length &&
@@ -89,7 +90,6 @@ export default function MemberSelection({
     );
   }, [selectedCompanies.length, companiesToShow.length]);
 
-  // Stabilize articleData using deep comparison of key properties
   const stableArticleData = useMemo(() => {
     return {
       title: articleData?.title || "",
@@ -100,12 +100,10 @@ export default function MemberSelection({
 
   useEffect(() => {
     const fetchRelevantCompanies = async () => {
-      // Always show loading initially if we have article data
       if (!stableArticleData.title) {
         return;
       }
 
-      // Check if we've already fetched this exact data
       if (
         prevArticleDataRef.current &&
         prevArticleDataRef.current.title === stableArticleData.title &&
@@ -115,7 +113,6 @@ export default function MemberSelection({
         return;
       }
 
-      // Start loading with 10-second forced duration
       setLoading(true);
       prevArticleDataRef.current = stableArticleData;
 
@@ -135,10 +132,50 @@ export default function MemberSelection({
 
         if (data.success && Array.isArray(data.members)) {
           setApiCompanies(data.members);
+          
+          // Check quota status
+          if (data.meta?.quotaStatus) {
+            const { percentageUsed, tokensRemaining } = data.meta.quotaStatus;
+            
+            if (percentageUsed >= 90) {
+              setQuotaWarning({
+                level: 'critical',
+                message: `Critical: ${percentageUsed}% of daily quota used`,
+                tokensRemaining: tokensRemaining
+              });
+              toast.warning(`Quota warning: ${percentageUsed}% used`, {
+                description: `Only ${tokensRemaining} tokens remaining today`,
+                duration: 5000
+              });
+            } else if (percentageUsed >= 75) {
+              setQuotaWarning({
+                level: 'warning',
+                message: `Warning: ${percentageUsed}% of daily quota used`,
+                tokensRemaining: tokensRemaining
+              });
+            } else {
+              setQuotaWarning(null);
+            }
+          }
+          
           toast.success("Found relevant companies based on your article");
+        } else if (data.quotaExceeded) {
+          // Quota exceeded
+          setQuotaWarning({
+            level: 'exceeded',
+            message: 'Daily quota exceeded',
+            resetDate: data.quotaStatus?.resetDate
+          });
+          
+          toast.error("Daily quota exceeded", {
+            description: "The team has used all free tokens for today. Quota resets tomorrow.",
+            duration: 10000
+          });
+          
+          setApiCompanies([]);
         } else {
           console.warn("API returned unsuccessful response:", data);
-          toast.error("Failed to analyze article and find relevant companies");
+          toast.error("Failed to analyse article and find relevant companies");
           setApiCompanies([]);
         }
       } catch (error) {
@@ -148,8 +185,6 @@ export default function MemberSelection({
         );
         setApiCompanies([]);
       }
-
-      // Note: We don't set loading to false here anymore - the LoadingOverlay component handles it
     };
 
     fetchRelevantCompanies();
@@ -159,13 +194,11 @@ export default function MemberSelection({
     stableArticleData.fullArticle,
   ]);
 
-  // Handle loading completion from the LoadingOverlay
   const handleLoadingComplete = () => {
     setLoading(false);
   };
 
   useEffect(() => {
-    // Only update if the array actually changed (not just reference)
     const currentIds = JSON.stringify(initialSelectedCompanyIds);
     const prevIds = JSON.stringify(prevInitialSelectedRef.current);
 
@@ -195,9 +228,11 @@ export default function MemberSelection({
   };
 
   const getRelevanceColor = (score) => {
-    if (score >= 90) return "text-[#00DFB8] bg-[#00DFB8]/10";
-    if (score >= 80) return "text-[#00B894] bg-[#00B894]/10";
-    return "text-[#00A085] bg-[#00A085]/10";
+    if (score >= 90)
+      return "text-[#00DFB8] bg-[#00DFB8]/10 dark:bg-[#00DFB8]/20";
+    if (score >= 80)
+      return "text-[#00B894] bg-[#00B894]/10 dark:bg-[#00B894]/20";
+    return "text-[#00A085] bg-[#00A085]/10 dark:bg-[#00A085]/20";
   };
 
   const handleContinue = () => {
@@ -224,37 +259,36 @@ export default function MemberSelection({
 
   return (
     <>
-      {/* Loading Overlay Component */}
       <LoadingOverlay
         isVisible={loading}
         title="Finding members you need to contact..."
         subtitle="Identifying the most relevant companies for commentary"
-        forcedDuration={10000} // 10 seconds
+        forcedDuration={10000}
       />
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
       </div>
 
       {/* Main Content */}
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 dark:from-slate-900 dark:via-teal-950/30 dark:to-emerald-950/20 p-6 transition-colors duration-300">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
 
         <div className="relative max-w-6xl mx-auto">
-          <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-3xl shadow-2xl shadow-teal-500/10 overflow-hidden">
+          <div className="backdrop-blur-xl bg-white/70 dark:bg-slate-800/70 border border-white/20 dark:border-slate-700/20 rounded-3xl shadow-2xl shadow-teal-500/10 overflow-hidden transition-colors duration-300">
             {/* Header */}
-            <div className="bg-gradient-to-r from-white/80 via-white/60 to-white/80 backdrop-blur-sm border-b border-white/20 p-8">
+            <div className="bg-gradient-to-r from-white/80 via-white/60 to-white/80 dark:from-slate-800/80 dark:via-slate-800/60 dark:to-slate-800/80 backdrop-blur-sm border-b border-white/20 dark:border-slate-700/20 p-8 transition-colors duration-300">
               <TPAMailLogo />
 
               {stableArticleData.title && (
-                <div className="mb-4 p-3 bg-white/30 backdrop-blur-sm border border-white/20 rounded-lg">
+                <div className="mb-4 p-3 bg-white/30 dark:bg-slate-700/30 backdrop-blur-sm border border-white/20 dark:border-slate-600/20 rounded-lg transition-colors duration-300">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-4 h-4 text-[#00DFB8]" />
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       Article: "{stableArticleData.title}"
                     </span>
                   </div>
                   {stableArticleData.synopsis && (
-                    <p className="text-xs text-gray-600 leading-relaxed">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                       {stableArticleData.synopsis.length > 120
                         ? `${stableArticleData.synopsis.substring(0, 120)}...`
                         : stableArticleData.synopsis}
@@ -263,12 +297,56 @@ export default function MemberSelection({
                 </div>
               )}
 
+              {/* Quota Warning Banner */}
+              {quotaWarning && (
+                <div className={`mb-4 p-4 rounded-lg border ${
+                  quotaWarning.level === 'exceeded' 
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
+                    : quotaWarning.level === 'critical'
+                    ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+                    : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${
+                      quotaWarning.level === 'exceeded'
+                        ? 'text-red-600 dark:text-red-400'
+                        : quotaWarning.level === 'critical'
+                        ? 'text-orange-600 dark:text-orange-400'
+                        : 'text-yellow-600 dark:text-yellow-400'
+                    }`} />
+                    <div className="flex-1">
+                      <h3 className={`text-sm font-semibold mb-1 ${
+                        quotaWarning.level === 'exceeded'
+                          ? 'text-red-800 dark:text-red-300'
+                          : quotaWarning.level === 'critical'
+                          ? 'text-orange-800 dark:text-orange-300'
+                          : 'text-yellow-800 dark:text-yellow-300'
+                      }`}>
+                        {quotaWarning.message}
+                      </h3>
+                      <p className={`text-xs ${
+                        quotaWarning.level === 'exceeded'
+                          ? 'text-red-700 dark:text-red-400'
+                          : quotaWarning.level === 'critical'
+                          ? 'text-orange-700 dark:text-orange-400'
+                          : 'text-yellow-700 dark:text-yellow-400'
+                      }`}>
+                        {quotaWarning.level === 'exceeded' 
+                          ? 'The team has used all free tokens for today. Service will resume tomorrow.'
+                          : `${quotaWarning.tokensRemaining} tokens remaining. Consider limiting usage for the rest of the day.`
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
                     Recommended companies
                   </h2>
-                  <p className="text-gray-600 leading-relaxed">
+                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
                     Based on your article content, we've identified these
                     companies who would be most relevant for commentary. You'll
                     need to identify specific contacts within these
@@ -279,14 +357,15 @@ export default function MemberSelection({
                   <div className="text-2xl font-bold text-[#00DFB8]">
                     {selectedCompanies.length}
                   </div>
-                  <div className="text-sm text-gray-500">selected</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    selected
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Rest of your existing component JSX... */}
             <div className="p-8">
-              <div className="flex items-center justify-between mb-6 p-4 bg-white/40 backdrop-blur-sm border border-white/30 rounded-xl">
+              <div className="flex items-center justify-between mb-6 p-4 bg-white/40 dark:bg-slate-700/40 backdrop-blur-sm border border-white/30 dark:border-slate-600/30 rounded-xl transition-colors duration-300">
                 <div className="flex items-center gap-3">
                   <Checkbox
                     id="select-all"
@@ -296,39 +375,38 @@ export default function MemberSelection({
                   />
                   <label
                     htmlFor="select-all"
-                    className="text-sm font-medium text-gray-700 cursor-pointer"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
                   >
                     Select all companies ({companiesToShow.length})
                   </label>
                 </div>
                 <Badge
                   variant="outline"
-                  className="bg-white/50 border-[#00DFB8]/20"
+                  className="bg-white/50 dark:bg-slate-600/50 border-[#00DFB8]/20 dark:border-[#00DFB8]/30"
                 >
                   <Building2 className="w-3 h-3 mr-1" />
                   {selectedCompanies.length} of {companiesToShow.length}
                 </Badge>
               </div>
 
-              {/* Companies grid - your existing code continues here... */}
+              {/* Companies grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {companiesToShow.map((company) => (
                   <div
                     key={company.id}
-                    className={`relative p-6 bg-white/50 backdrop-blur-sm border rounded-xl cursor-pointer transition-all duration-300 group ${
+                    className={`relative p-6 bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border rounded-xl cursor-pointer transition-all duration-300 group ${
                       selectedCompanies.includes(company.id)
-                        ? "border-[#00DFB8]/40 bg-[#00DFB8]/5 shadow-lg"
-                        : "border-white/30 hover:border-[#00DFB8]/20 hover:bg-white/70"
+                        ? "border-[#00DFB8]/40 bg-[#00DFB8]/5 dark:bg-[#00DFB8]/10 shadow-lg"
+                        : "border-white/30 dark:border-slate-600/30 hover:border-[#00DFB8]/20 hover:bg-white/70 dark:hover:bg-slate-700/70"
                     }`}
                     onClick={() => handleCompanySelect(company.id)}
                   >
-                    {/* Your existing company card JSX... */}
                     <div className="absolute top-4 right-4">
                       <div
                         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
                           selectedCompanies.includes(company.id)
                             ? "bg-[#00DFB8] border-[#00DFB8]"
-                            : "border-gray-300 group-hover:border-[#00DFB8]/50"
+                            : "border-gray-300 dark:border-gray-600 group-hover:border-[#00DFB8]/50"
                         }`}
                       >
                         {selectedCompanies.includes(company.id) && (
@@ -343,7 +421,7 @@ export default function MemberSelection({
                       </div>
 
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-800 mb-1">
+                        <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-1">
                           {company.company}
                         </h3>
 
@@ -368,7 +446,7 @@ export default function MemberSelection({
                               <Badge
                                 key={index}
                                 variant="outline"
-                                className="text-xs bg-white/50 border-[#00DFB8]/20 text-gray-600"
+                                className="text-xs bg-white/50 dark:bg-slate-600/50 border-[#00DFB8]/20 text-gray-600 dark:text-gray-300"
                               >
                                 {skill}
                               </Badge>
@@ -376,7 +454,7 @@ export default function MemberSelection({
                           {(company.expertise || []).length > 3 && (
                             <Badge
                               variant="outline"
-                              className="text-xs bg-white/50 border-gray-200"
+                              className="text-xs bg-white/50 dark:bg-slate-600/50 border-gray-200 dark:border-gray-600"
                             >
                               +{(company.expertise || []).length - 3}
                             </Badge>
@@ -386,8 +464,8 @@ export default function MemberSelection({
                         {company.marketSegments &&
                           company.marketSegments.length > 0 && (
                             <div className="flex items-center gap-2 mb-2">
-                              <Briefcase className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs text-gray-500">
+                              <Briefcase className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {company.marketSegments.slice(0, 3).join(", ")}
                               </span>
                             </div>
@@ -396,14 +474,14 @@ export default function MemberSelection({
                         {company.geographicFocus &&
                           company.geographicFocus.length > 0 && (
                             <div className="flex items-center gap-2 mb-3">
-                              <Globe className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs text-gray-500">
+                              <Globe className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {company.geographicFocus.slice(0, 3).join(", ")}
                               </span>
                             </div>
                           )}
 
-                        <p className="text-xs text-gray-600 leading-relaxed">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                           {company?.bio &&
                           typeof company.bio === "string" &&
                           company.bio.length > 100
@@ -412,8 +490,8 @@ export default function MemberSelection({
                         </p>
 
                         {company.reasoning && (
-                          <div className="mt-2 p-2 bg-[#00DFB8]/5 rounded-lg">
-                            <p className="text-xs text-gray-600 italic">
+                          <div className="mt-2 p-2 bg-[#00DFB8]/5 dark:bg-[#00DFB8]/10 rounded-lg">
+                            <p className="text-xs text-gray-600 dark:text-gray-400 italic">
                               "{company.reasoning}"
                             </p>
                           </div>
@@ -424,11 +502,11 @@ export default function MemberSelection({
                 ))}
               </div>
 
-              <div className="flex justify-between items-center pt-6 border-t border-white/20">
+              <div className="flex justify-between items-center pt-6 border-t border-white/20 dark:border-slate-700/20">
                 <Button
                   variant="outline"
                   onClick={handleBack}
-                  className="px-6 bg-white/50 backdrop-blur-sm border-white/30 hover:bg-white/70"
+                  className="px-6 bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border-white/30 dark:border-slate-600/30 hover:bg-white/70 dark:hover:bg-slate-700/70"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to article

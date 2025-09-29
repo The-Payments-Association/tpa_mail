@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Sparkles, ArrowRight } from "lucide-react";
+import { FileText, Mail, Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TPAMailLogo = () => (
@@ -16,7 +16,7 @@ const TPAMailLogo = () => (
       <div className="absolute -inset-1 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
       <div className="relative w-14 h-14 bg-gradient-to-br from-[#00DFB8] to-[#00B894] rounded-xl flex items-center justify-center shadow-lg">
         <Mail className="w-7 h-7 text-white" />
-        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full border-2 border-white dark:border-slate-800 shadow-lg flex items-center justify-center">
           <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
         </div>
       </div>
@@ -38,6 +38,33 @@ export default function LandingPage({ onContinue, initialData = {} }) {
   const [synopsis, setSynopsis] = useState(initialData.synopsis || "");
   const [fullArticle, setFullArticle] = useState(initialData.fullArticle || "");
   const [isArticleDialogOpen, setIsArticleDialogOpen] = useState(false);
+  const [quotaStatus, setQuotaStatus] = useState(null);
+
+  // Fetch quota status on mount
+  useEffect(() => {
+    const fetchQuotaStatus = async () => {
+      try {
+        const response = await fetch('/api/quota-status');
+        const data = await response.json();
+        
+        if (data.success) {
+          setQuotaStatus(data.quota);
+          
+          // Show warning if quota is high
+          if (data.quota.percentageUsed >= 90) {
+            toast.warning('Quota warning', {
+              description: `${data.quota.percentageUsed}% of daily quota used`,
+              duration: 5000
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch quota status:', error);
+      }
+    };
+
+    fetchQuotaStatus();
+  }, []);
 
   const handleArticleSave = () => {
     setIsArticleDialogOpen(false);
@@ -52,6 +79,15 @@ export default function LandingPage({ onContinue, initialData = {} }) {
   const handleNext = () => {
     if (!title || !synopsis) {
       toast.error("Please complete the required fields");
+      return;
+    }
+
+    // Check quota before continuing
+    if (quotaStatus && !quotaStatus.allowed) {
+      toast.error("Daily quota exceeded", {
+        description: "The team has used all free tokens for today. Please try again tomorrow.",
+        duration: 8000
+      });
       return;
     }
 
@@ -71,6 +107,13 @@ export default function LandingPage({ onContinue, initialData = {} }) {
     return `${preview}... (${wordCount} words)`;
   };
 
+  const getQuotaColor = () => {
+    if (!quotaStatus) return 'from-[#00DFB8] to-[#00B894]';
+    if (quotaStatus.percentageUsed >= 90) return 'from-red-500 to-red-600';
+    if (quotaStatus.percentageUsed >= 75) return 'from-orange-500 to-orange-600';
+    return 'from-[#00DFB8] to-[#00B894]';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 dark:from-slate-900 dark:via-teal-950/30 dark:to-emerald-950/20 p-6 transition-colors duration-300">
       {/* Background Pattern */}
@@ -82,13 +125,66 @@ export default function LandingPage({ onContinue, initialData = {} }) {
       </div>
 
       <div className="relative max-w-4xl mx-auto">
+        {/* Quota Status Bar - Above Main Card */}
+        {quotaStatus && (
+          <div className="mb-4 p-4 backdrop-blur-xl bg-white/70 dark:bg-slate-800/70 border border-white/20 dark:border-slate-700/20 rounded-2xl shadow-lg transition-colors duration-300">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                  Daily Quota Usage
+                </span>
+                {quotaStatus.percentageUsed >= 90 && (
+                  <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                )}
+              </div>
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                {quotaStatus.percentageUsed}% used
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden transition-colors">
+              <div 
+                className={`bg-gradient-to-r ${getQuotaColor()} h-2 rounded-full transition-all duration-500 ease-out`}
+                style={{ width: `${quotaStatus.percentageUsed}%` }}
+              ></div>
+            </div>
+            
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {quotaStatus.tokensRemaining.toLocaleString()} tokens remaining
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {quotaStatus.requestsRemaining} requests left
+              </span>
+            </div>
+            
+            {/* Warning Message */}
+            {quotaStatus.percentageUsed >= 90 && (
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-xs text-red-700 dark:text-red-400">
+                  <strong>Warning:</strong> Running low on quota. Service may be limited soon.
+                </p>
+              </div>
+            )}
+            
+            {!quotaStatus.allowed && (
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-xs text-red-700 dark:text-red-400">
+                  <strong>Quota Exceeded:</strong> Daily limit reached. Service will resume tomorrow.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Main Glass Card */}
         <div className="backdrop-blur-xl bg-white/70 dark:bg-slate-800/70 border border-white/20 dark:border-slate-700/20 rounded-3xl shadow-2xl shadow-teal-500/10 overflow-hidden transition-colors duration-300">
           {/* Header */}
           <div className="bg-gradient-to-r from-white/80 via-white/60 to-white/80 dark:from-slate-800/80 dark:via-slate-800/60 dark:to-slate-800/80 backdrop-blur-sm border-b border-white/20 dark:border-slate-700/20 p-8 transition-colors duration-300">
             <TPAMailLogo />
             <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed transition-colors duration-300">
-              Create and manage your PI communicatins
+              Create and manage your PI communications
             </p>
           </div>
           
@@ -207,7 +303,7 @@ export default function LandingPage({ onContinue, initialData = {} }) {
             <div className="flex justify-end pt-8">
               <Button 
                 size="lg" 
-                disabled={!title || !synopsis}
+                disabled={!title || !synopsis || (quotaStatus && !quotaStatus.allowed)}
                 onClick={handleNext}
                 className="px-8 py-3 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] hover:from-[#00B894] hover:via-[#00A085] hover:to-[#008B73] text-white border-0 rounded-xl shadow-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 group"
               >

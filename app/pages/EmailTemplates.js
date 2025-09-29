@@ -49,7 +49,9 @@ const TPAMailLogo = () => (
       <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400 bg-clip-text text-transparent">
         TPA Mail
       </h1>
-      <p className="text-xs text-gray-500 dark:text-gray-400">The Payments Association</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        The Payments Association
+      </p>
     </div>
   </div>
 );
@@ -58,45 +60,55 @@ const TPAMailLogo = () => (
 const validateEmail = (template) => {
   const issues = [];
   const warnings = [];
-  
+
   // Critical issues (must fix)
-  if (template.body.includes('**XXX**') || template.body.includes('XXX')) {
-    issues.push('Contains placeholder **XXX** that needs to be replaced');
+  if (template.body.includes("**XXX**") || template.body.includes("XXX")) {
+    issues.push("Contains placeholder **XXX** that needs to be replaced");
   }
-  
-  if (!template.body.includes('Hi ')) {
-    issues.push('Missing greeting');
+
+  if (!template.body.includes("Hi ")) {
+    issues.push("Missing greeting");
   }
-  
+
   // Warnings (should review)
   if (template.body.length < 150) {
-    warnings.push('Email seems quite short (under 150 characters)');
+    warnings.push("Email seems quite short (under 150 characters)");
   }
-  
+
   if (template.body.length > 1000) {
-    warnings.push('Email is quite long (over 1000 characters) - consider shortening');
+    warnings.push(
+      "Email is quite long (over 1000 characters) - consider shortening"
+    );
   }
-  
-  const wordCount = template.body.split(/\s+/).filter(w => w.length > 0).length;
+
+  const wordCount = template.body
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
   if (wordCount < 50) {
-    warnings.push(`Email has only ${wordCount} words - consider adding more detail`);
+    warnings.push(
+      `Email has only ${wordCount} words - consider adding more detail`
+    );
   }
-  
-  if (!template.body.toLowerCase().includes('article') && !template.body.toLowerCase().includes('commentary')) {
-    warnings.push('No mention of article or commentary found');
+
+  if (
+    !template.body.toLowerCase().includes("article") &&
+    !template.body.toLowerCase().includes("commentary")
+  ) {
+    warnings.push("No mention of article or commentary found");
   }
-  
-  if (!template.body.toLowerCase().includes('deadline')) {
-    warnings.push('No deadline mentioned in email');
+
+  if (!template.body.toLowerCase().includes("deadline")) {
+    warnings.push("No deadline mentioned in email");
   }
-  
-  const hasContactDetails = template.body.toLowerCase().includes('let me know') || 
-                           template.body.toLowerCase().includes('contact') ||
-                           template.body.toLowerCase().includes('information');
+
+  const hasContactDetails =
+    template.body.toLowerCase().includes("let me know") ||
+    template.body.toLowerCase().includes("contact") ||
+    template.body.toLowerCase().includes("information");
   if (!hasContactDetails) {
-    warnings.push('Consider adding a call-to-action or contact invitation');
+    warnings.push("Consider adding a call-to-action or contact invitation");
   }
-  
+
   return { issues, warnings };
 };
 
@@ -154,7 +166,9 @@ export default function EmailTemplates({
   const totalEmails = emailTemplates.length;
 
   // Get validation results for current template
-  const validationResults = validateEmail(currentTemplate?.template || { body: '' });
+  const validationResults = validateEmail(
+    currentTemplate?.template || { body: "" }
+  );
 
   // Auto-generate emails on component mount
   useEffect(() => {
@@ -399,7 +413,9 @@ export default function EmailTemplates({
                 <div className="text-2xl font-bold text-[#00DFB8]">
                   {approvedCount}/{totalEmails}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">approved</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  approved
+                </div>
               </div>
             </div>
           </div>
@@ -527,21 +543,28 @@ export default function EmailTemplates({
                 </div>
 
                 {/* Validation Warnings */}
-                {(validationResults.issues.length > 0 || validationResults.warnings.length > 0) && (
-                  <div className={`rounded-lg p-4 border ${
-                    validationResults.issues.length > 0 
-                      ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
-                      : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-                  }`}>
-                    <h4 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${
-                      validationResults.issues.length > 0 
-                        ? 'text-red-800 dark:text-red-400' 
-                        : 'text-yellow-800 dark:text-yellow-400'
-                    }`}>
+                {(validationResults.issues.length > 0 ||
+                  validationResults.warnings.length > 0) && (
+                  <div
+                    className={`rounded-lg p-4 border ${
+                      validationResults.issues.length > 0
+                        ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                        : "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+                    }`}
+                  >
+                    <h4
+                      className={`text-sm font-semibold mb-2 flex items-center gap-2 ${
+                        validationResults.issues.length > 0
+                          ? "text-red-800 dark:text-red-400"
+                          : "text-yellow-800 dark:text-yellow-400"
+                      }`}
+                    >
                       <AlertTriangle className="w-4 h-4" />
-                      {validationResults.issues.length > 0 ? 'Critical issues' : 'Warnings'}
+                      {validationResults.issues.length > 0
+                        ? "Critical issues"
+                        : "Warnings"}
                     </h4>
-                    
+
                     {validationResults.issues.length > 0 && (
                       <ul className="text-sm text-red-700 dark:text-red-400 space-y-1 mb-2">
                         {validationResults.issues.map((issue, idx) => (
@@ -549,7 +572,7 @@ export default function EmailTemplates({
                         ))}
                       </ul>
                     )}
-                    
+
                     {validationResults.warnings.length > 0 && (
                       <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
                         {validationResults.warnings.map((warning, idx) => (
@@ -632,8 +655,7 @@ export default function EmailTemplates({
                     <Textarea
                       value={currentTemplate.template.body}
                       onChange={(e) => updateTemplate("body", e.target.value)}
-                      className="min-h-[400px] text-base bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border border-white/30 dark:border-slate-600/30 rounded-xl shadow-sm hover:bg-white/70 dark:hover:bg-slate-700/70 focus:bg-white/80 dark:focus:bg-slate-700/80 focus:border-[#00DFB8]/30 transition-all duration-300 placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none"
-                      placeholder="Enter email content..."
+                      className="min-h-[400px] whitespace-pre-wrap"
                       rows={16}
                     />
                     <div className="absolute bottom-4 right-4">

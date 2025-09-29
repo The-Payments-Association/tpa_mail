@@ -1,8 +1,9 @@
-import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
+import { checkQuota, recordUsage } from '../../../lib/quotaTracker';
 
-const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 const EMAIL_TEMPLATE = `Hi **XXX**,
@@ -11,7 +12,7 @@ I'm a data journalist at The Payments Association. I'm writing to offer you the 
 
 {article_summary}
 
-For context: Article commentary is a ~70-word statement included in the 'Industry Voices' section of our articles - along with the person's name, job title, and company - which are shared with our entire membership and through our social media channels.
+Article commentary is a ~70-word statement included in the 'Industry Voices' section of our articles - along with the commenter's name, job title, and company. These articles are shared with our entire membership and through our social media channels.
 
 The deadline for commentary is **XXX**
 
@@ -25,6 +26,30 @@ export async function POST(request) {
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
   try {
+    // CHECK QUOTA FIRST
+const quotaStatus = await checkQuota();
+    
+    if (!quotaStatus.allowed) {
+      console.error('\n❌ QUOTA EXCEEDED');
+      console.error(`📊 Tokens used: ${quotaStatus.tokensUsed}`);
+      console.error(`📊 Requests used: ${quotaStatus.requestsUsed}`);
+      
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Daily quota exceeded. The team has used all free tokens for today.',
+        quotaExceeded: true,
+        quotaStatus: {
+          tokensUsed: quotaStatus.tokensUsed,
+          requestsUsed: quotaStatus.requestsUsed,
+          resetDate: quotaStatus.resetDate,
+          message: 'Quota will reset tomorrow. Please try again then.'
+        }
+      }, { status: 429 });
+    }
+
+    console.log(`\n📊 QUOTA STATUS:`);
+    console.log(`  Tokens: ${quotaStatus.tokensUsed}/${quotaStatus.tokensUsed + quotaStatus.tokensRemaining} (${quotaStatus.percentageUsed}% used)`);
+
     const { articleData, selectedMembers } = await request.json();
 
     console.log('\n📝 INPUT DATA:');
@@ -32,7 +57,7 @@ export async function POST(request) {
     console.log(`📋 Original synopsis length: ${articleData.synopsis?.length || 0} characters`);
     console.log(`👥 Selected members: ${selectedMembers.length}`);
 
-    // Create a concise max 50-word summary that follows "The article..."
+    // Create article summary
     console.log('\n📝 CREATING ARTICLE SUMMARY FOR EMAIL...');
     const summaryPrompt = `Create a concise, direct summary for use in a professional email outreach. The summary should follow the phrase "The article" and be written in a clear, to-the-point tone.
 
@@ -48,146 +73,103 @@ Requirements:
 
 Return only the summary text, no additional formatting or quotes.`;
 
-    console.log(`📏 Summary prompt length: ${summaryPrompt.length} characters`);
-
-    const summaryResponse = await genAI.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
-      contents: summaryPrompt,
-      config: {
-        temperature: 0.4
-      }
+    const summaryResponse = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'user',
+          content: summaryPrompt,
+        },
+      ],
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.4,
     });
 
-    let synopsisSummary = '';
-    if (typeof summaryResponse.text === 'function') {
-      synopsisSummary = await summaryResponse.text();
-    } else if (summaryResponse.text) {
-      synopsisSummary = summaryResponse.text;
-    } else if (summaryResponse.candidates && summaryResponse.candidates[0]) {
-      synopsisSummary = summaryResponse.candidates[0].content.parts[0].text;
-    }
-    
-    synopsisSummary = synopsisSummary.trim();
+    // Record summary generation usage
+    recordUsage(summaryResponse.usage.total_tokens);
+    console.log(`⚡ Summary generation: ${summaryResponse.usage.total_tokens} tokens`);
+
+    const synopsisSummary = summaryResponse.choices[0].message.content.trim();
     const summaryWordCount = synopsisSummary.split(/\s+/).length;
 
     console.log(`✅ Article summary created:`);
     console.log(`📝 Summary: "${synopsisSummary}"`);
     console.log(`📊 Word count: ${summaryWordCount} words`);
-    console.log(`📉 Compression: ${articleData.synopsis?.length || 0} → ${synopsisSummary.length} characters`);
 
     console.log('\n🎯 SELECTED MEMBERS FOR EMAIL GENERATION:');
     selectedMembers.forEach((member, index) => {
-      console.log(`  ${index + 1}. ${member.name} (${member.company})`);
-      console.log(`     🏷️ Role: ${member.role}`);
-      console.log(`     🎯 Expertise: ${member.expertise?.join(', ')}`);
+      console.log(`  ${index + 1}. ${member.company}`);
     });
-
-    const systemPrompt = `You are a data journalist at The Payments Association requesting industry commentary.
-
-Create personalised commentary requests using the template. Focus on:
-- Direct, professional tone - be concise and to the point
-- Clearly explain why their specific expertise is relevant
-- Keep the greeting as "Hi **XXX**," (exactly as shown)
-- Use the provided article summary after "The article"
-- No unnecessary pleasantries or filler content
-- Get straight to the purpose`;
 
     console.log('\n🔄 PROCESSING INDIVIDUAL EMAILS:');
 
     const emailPromises = selectedMembers.map(async (member, index) => {
       const memberStartTime = Date.now();
-      console.log(`\n  📧 ${index + 1}/${selectedMembers.length}: Processing ${member.name} (${member.company})`);
+      console.log(`\n  📧 ${index + 1}/${selectedMembers.length}: Processing ${member.company}`);
 
-      const userPrompt = `${systemPrompt}
+      const templateForPrompt = EMAIL_TEMPLATE
+        .replace('{subject}', articleData.title)
+        .replace('{article_summary}', synopsisSummary);
 
-Create commentary request for:
+      const userPrompt = `You are generating a professional email. You MUST preserve all line breaks and formatting exactly as shown in the template.
 
-**Company:** ${member.company}
-**Expertise:** ${member.expertise.join(', ')}
-**Article Title:** ${articleData.title}
-**Article Summary (use exactly as provided after "The article"):** ${synopsisSummary}
+CRITICAL INSTRUCTIONS:
 
-**Template to customise:** ${EMAIL_TEMPLATE}
+1. Use the template EXACTLY as provided below
+2. Preserve ALL line breaks (empty lines between paragraphs)
+3. Keep "Hi **XXX**," exactly as written
+4. Keep "The deadline for commentary is **XXX**" exactly as written
+5. DO NOT add any extra text or sentences
+6. DO NOT modify the structure or spacing
 
-Instructions:
-1. Keep subject as "TPA Request"
-2. Keep greeting as "Hi **XXX**," exactly
-3. Replace {subject} with the article title
-4. Replace {article_summary} with the provided summary (it already follows "The article")
-5. Write one clear, direct sentence explaining why their expertise is valuable for this specific article topic
-6. Keep the tone professional but direct - no unnecessary words
+When returning JSON, use \\n for line breaks to preserve formatting.
 
-Return JSON format:
-{"subject": "TPA Request", "body": "Complete personalised email with Hi **XXX**, greeting"}`;
+**TEMPLATE (use exactly, preserving all line breaks):**
 
-      console.log(`     📏 Prompt length: ${userPrompt.length} characters`);
-      console.log(`     🎯 Key expertise areas: ${member.expertise?.slice(0, 3).join(', ')}`);
-      console.log(`     📝 Using summary: "${synopsisSummary.substring(0, 50)}..."`);
+${templateForPrompt}
+
+Return this exact text as JSON with proper line break encoding:
+{"subject": "TPA Request", "body": "email with \\n for line breaks"}
+
+REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
 
       try {
-        const response = await genAI.models.generateContent({
-          model: 'gemini-2.0-flash-exp',
-          contents: userPrompt,
-          config: {
-            temperature: 0.5,
-            responseMimeType: "application/json"
-          }
+        const response = await groq.chat.completions.create({
+          messages: [
+            {
+              role: 'system',
+              content: 'You follow templates exactly as instructed. You preserve all line breaks and formatting. You use \\n characters in JSON strings for line breaks.'
+            },
+            {
+              role: 'user',
+              content: userPrompt,
+            },
+          ],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
         });
+
+        // Record usage for this email
+        recordUsage(response.usage.total_tokens);
 
         const memberProcessingTime = Date.now() - memberStartTime;
         console.log(`     ✅ Response received (${memberProcessingTime}ms)`);
+        console.log(`     ⚡ Tokens used: ${response.usage.total_tokens}`);
         
-        // Properly extract text from Gemini response
-        let responseText = '';
-        if (typeof response.text === 'function') {
-          responseText = await response.text();
-        } else if (response.text) {
-          responseText = response.text;
-        } else if (response.candidates && response.candidates[0]) {
-          responseText = response.candidates[0].content.parts[0].text;
-        }
+        let emailContent = JSON.parse(response.choices[0].message.content);
         
-        console.log(`     📏 Response length: ${responseText?.length || 0} characters`);
-        console.log(`     📋 Raw response preview: ${responseText?.substring(0, 200)}...`);
-
-        // Parse JSON with error handling
-        let emailContent;
-        try {
-          emailContent = JSON.parse(responseText);
-        } catch (parseError) {
-          console.error(`     ❌ JSON parse error: ${parseError.message}`);
-          console.error(`     📋 Raw text: ${responseText}`);
-          throw new Error('Failed to parse JSON response from Gemini');
-        }
-        
-        // Ensure subject is always "TPA Request"
         emailContent.subject = "TPA Request";
         
-        // Validate that we have body
-        if (!emailContent.body) {
-          console.error(`     ❌ Missing body in response:`, emailContent);
-          throw new Error('Response missing body field');
+        if (!emailContent.body.includes('\n') && !emailContent.body.includes('\\n')) {
+          console.warn('     ⚠️ No line breaks detected, using fallback template');
+          throw new Error('Line breaks not preserved');
         }
+        
+        emailContent.body = emailContent.body.replace(/\\n/g, '\n');
         
         console.log(`     📧 Subject: ${emailContent.subject}`);
         console.log(`     📝 Body length: ${emailContent.body?.length || 0} characters`);
-        
-        // Log key personalization elements
-        const bodyLower = emailContent.body?.toLowerCase() || '';
-        const mentionsExpertise = member.expertise?.some(exp => 
-          bodyLower.includes(exp.toLowerCase())
-        );
-        const mentionsCompany = bodyLower.includes(member.company.toLowerCase());
-        const hasXXXGreeting = emailContent.body.includes('Hi **XXX**');
-        
-        console.log(`     🎯 Personalization check:`);
-        console.log(`       • Has "Hi **XXX**" greeting: ${hasXXXGreeting ? '✅' : '❌'}`);
-        console.log(`       • Mentions expertise: ${mentionsExpertise ? '✅' : '❌'}`);
-        console.log(`       • Mentions company: ${mentionsCompany ? '✅' : '❌'}`);
-
-        // Log snippet of the generated email for quality check
-        const emailPreview = emailContent.body?.substring(0, 200) || '';
-        console.log(`     📖 Email preview: "${emailPreview}..."`);
+        console.log(`     📐 Line breaks preserved: ${emailContent.body.includes('\n') ? 'Yes' : 'No'}`);
 
         return {
           memberId: member.id,
@@ -204,20 +186,21 @@ Return JSON format:
 
       } catch (memberError) {
         const memberProcessingTime = Date.now() - memberStartTime;
-        console.error(`     ❌ Failed for ${member.name} (${memberProcessingTime}ms):`);
+        console.error(`     ❌ Failed for ${member.company} (${memberProcessingTime}ms)`);
         console.error(`     📝 Error: ${memberError.message}`);
         
-        // Return a fallback template
+        const fallbackBody = EMAIL_TEMPLATE
+          .replace('{subject}', articleData.title)
+          .replace('{article_summary}', synopsisSummary);
+        
+        console.log('     🔄 Using fallback template with preserved line breaks');
+        
         return {
           memberId: member.id,
           member: member,
           template: {
             subject: "TPA Request",
-            body: EMAIL_TEMPLATE
-              .replace('{subject}', articleData.title)
-              .replace('{article_summary}', synopsisSummary)
-              .replace('{company}', member.company)
-              .replace('{expertise}', member.expertise.slice(0, 2).join(' and '))
+            body: fallbackBody
           },
           isEdited: false,
           isApproved: false,
@@ -233,35 +216,19 @@ Return JSON format:
 
     const totalProcessingTime = Date.now() - startTime;
     
+    // Get final quota status
+    const finalQuota = checkQuota();
+    
     console.log('\n📊 EMAIL GENERATION SUMMARY:');
     console.log(`⏱️ Total processing time: ${totalProcessingTime}ms`);
     console.log(`✅ Successful generations: ${generatedEmails.filter(e => !e.error).length}`);
     console.log(`❌ Failed generations: ${generatedEmails.filter(e => e.error).length}`);
-    console.log(`📧 Average time per email: ${Math.round(totalProcessingTime / selectedMembers.length)}ms`);
+    console.log(`📊 Final quota: ${finalQuota.tokensUsed} tokens used (${finalQuota.percentageUsed}%)`);
 
-    // Log personalization insights
-    const personalizedEmails = generatedEmails.filter(email => {
-      const body = email.template.body?.toLowerCase() || '';
-      return email.member.expertise?.some(exp => body.includes(exp.toLowerCase()));
-    });
-
-    const xxxGreetingCount = generatedEmails.filter(email => {
-      return email.template.body.includes('Hi **XXX**');
-    }).length;
-
-    console.log(`🎯 Personalization success rate: ${Math.round((personalizedEmails.length / generatedEmails.length) * 100)}%`);
-    console.log(`👋 "Hi **XXX**" greeting usage: ${xxxGreetingCount}/${generatedEmails.length} emails`);
-
-    if (generatedEmails.some(e => e.error)) {
-      console.log('\n⚠️ GENERATION ERRORS:');
-      generatedEmails.filter(e => e.error).forEach(email => {
-        console.log(`  • ${email.member.name}: ${email.error}`);
-      });
-    }
-
-    console.log('\n💡 ARTICLE SUMMARY USED IN EMAILS:');
-    console.log(`"${synopsisSummary}"`);
-    console.log(`(${summaryWordCount} words, ${synopsisSummary.length} characters)`);
+    const emailsWithLineBreaks = generatedEmails.filter(e => 
+      e.template?.body?.includes('\n')
+    ).length;
+    console.log(`📐 Emails with preserved line breaks: ${emailsWithLineBreaks}/${generatedEmails.length}`);
 
     console.log('\n🎉 EMAIL GENERATION COMPLETE');
     console.log('📧 === EMAIL GENERATION FINISHED ===\n');
@@ -269,7 +236,11 @@ Return JSON format:
     return NextResponse.json({ 
       success: true, 
       emails: generatedEmails,
-      synopsisSummary: synopsisSummary
+      synopsisSummary: synopsisSummary,
+      quotaStatus: {
+        percentageUsed: finalQuota.percentageUsed,
+        tokensRemaining: finalQuota.tokensRemaining
+      }
     });
 
   } catch (error) {
@@ -283,7 +254,7 @@ Return JSON format:
     
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to generate commentary request emails using Gemini' 
+      error: 'Failed to generate commentary request emails' 
     }, { status: 500 });
   }
 }
