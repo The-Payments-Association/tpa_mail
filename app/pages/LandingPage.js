@@ -5,9 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
+import {
+  FileText,
+  Mail,
+  Sparkles,
+  ArrowRight,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TPAMailLogo = () => (
@@ -44,22 +56,22 @@ export default function LandingPage({ onContinue, initialData = {} }) {
   useEffect(() => {
     const fetchQuotaStatus = async () => {
       try {
-        const response = await fetch('/api/quota-status');
+        const response = await fetch("/api/quota-status");
         const data = await response.json();
-        
+
         if (data.success) {
           setQuotaStatus(data.quota);
-          
+
           // Show warning if quota is high
           if (data.quota.percentageUsed >= 90) {
-            toast.warning('Quota warning', {
+            toast.warning("Quota warning", {
               description: `${data.quota.percentageUsed}% of daily quota used`,
-              duration: 5000
+              duration: 5000,
             });
           }
         }
       } catch (error) {
-        console.error('Failed to fetch quota status:', error);
+        console.error("Failed to fetch quota status:", error);
       }
     };
 
@@ -85,8 +97,9 @@ export default function LandingPage({ onContinue, initialData = {} }) {
     // Check quota before continuing
     if (quotaStatus && !quotaStatus.allowed) {
       toast.error("Daily quota exceeded", {
-        description: "The team has used all free tokens for today. Please try again tomorrow.",
-        duration: 8000
+        description:
+          "The team has used all free tokens for today. Please try again tomorrow.",
+        duration: 8000,
       });
       return;
     }
@@ -94,9 +107,9 @@ export default function LandingPage({ onContinue, initialData = {} }) {
     const data = {
       title,
       synopsis,
-      fullArticle
+      fullArticle,
     };
-    
+
     onContinue?.(data);
   };
 
@@ -108,17 +121,18 @@ export default function LandingPage({ onContinue, initialData = {} }) {
   };
 
   const getQuotaColor = () => {
-    if (!quotaStatus) return 'from-[#00DFB8] to-[#00B894]';
-    if (quotaStatus.percentageUsed >= 90) return 'from-red-500 to-red-600';
-    if (quotaStatus.percentageUsed >= 75) return 'from-orange-500 to-orange-600';
-    return 'from-[#00DFB8] to-[#00B894]';
+    if (!quotaStatus) return "from-[#00DFB8] to-[#00B894]";
+    if (quotaStatus.percentageUsed >= 90) return "from-red-500 to-red-600";
+    if (quotaStatus.percentageUsed >= 75)
+      return "from-orange-500 to-orange-600";
+    return "from-[#00DFB8] to-[#00B894]";
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 dark:from-slate-900 dark:via-teal-950/30 dark:to-emerald-950/20 p-6 transition-colors duration-300">
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
-      
+
       {/* Theme Toggle - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
@@ -141,37 +155,42 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                 {quotaStatus.percentageUsed}% used
               </div>
             </div>
-            
+
             {/* Progress Bar */}
             <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden transition-colors">
-              <div 
+              <div
                 className={`bg-gradient-to-r ${getQuotaColor()} h-2 rounded-full transition-all duration-500 ease-out`}
                 style={{ width: `${quotaStatus.percentageUsed}%` }}
               ></div>
             </div>
-            
+
             <div className="flex items-center justify-between mt-2">
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {quotaStatus.tokensRemaining.toLocaleString()} tokens remaining
+                {quotaStatus?.tokensRemaining != null
+                  ? quotaStatus.tokensRemaining.toLocaleString() +
+                    " tokens remaining"
+                  : "N/A"}
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {quotaStatus.requestsRemaining} requests left
+                {quotaStatus?.requestsRemaining ?? "N/A"} requests left
               </span>
             </div>
-            
+
             {/* Warning Message */}
             {quotaStatus.percentageUsed >= 90 && (
               <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-xs text-red-700 dark:text-red-400">
-                  <strong>Warning:</strong> Running low on quota. Service may be limited soon.
+                  <strong>Warning:</strong> Running low on quota. Service may be
+                  limited soon.
                 </p>
               </div>
             )}
-            
+
             {!quotaStatus.allowed && (
               <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-xs text-red-700 dark:text-red-400">
-                  <strong>Quota Exceeded:</strong> Daily limit reached. Service will resume tomorrow.
+                  <strong>Quota Exceeded:</strong> Daily limit reached. Service
+                  will resume tomorrow.
                 </p>
               </div>
             )}
@@ -187,12 +206,15 @@ export default function LandingPage({ onContinue, initialData = {} }) {
               Create and manage your PI communications
             </p>
           </div>
-          
+
           {/* Content */}
           <div className="p-8 space-y-8">
             {/* Title Field */}
             <div className="space-y-3 group">
-              <Label htmlFor="title" className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+              <Label
+                htmlFor="title"
+                className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2"
+              >
                 Article title
                 <div className="h-1 w-1 bg-[#00DFB8] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Label>
@@ -210,7 +232,10 @@ export default function LandingPage({ onContinue, initialData = {} }) {
 
             {/* Synopsis Field */}
             <div className="space-y-3 group">
-              <Label htmlFor="synopsis" className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+              <Label
+                htmlFor="synopsis"
+                className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2"
+              >
                 Synopsis
                 <div className="h-1 w-1 bg-[#00B894] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Label>
@@ -233,10 +258,13 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                 Full article
                 <div className="h-1 w-1 bg-[#00E6C7] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Label>
-              
-              <Dialog open={isArticleDialogOpen} onOpenChange={setIsArticleDialogOpen}>
+
+              <Dialog
+                open={isArticleDialogOpen}
+                onOpenChange={setIsArticleDialogOpen}
+              >
                 <DialogTrigger asChild>
-                  <div 
+                  <div
                     className="relative min-h-[80px] p-4 bg-white/40 dark:bg-slate-700/40 backdrop-blur-sm border border-white/30 dark:border-slate-600/30 rounded-xl cursor-pointer hover:bg-white/60 dark:hover:bg-slate-700/60 hover:border-[#00DFB8]/20 transition-all duration-300 group/article"
                     role="button"
                     tabIndex={0}
@@ -246,7 +274,13 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                         <FileText className="w-5 h-5 text-[#00B894]" />
                       </div>
                       <div className="flex-1">
-                        <span className={`text-sm leading-relaxed ${fullArticle ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
+                        <span
+                          className={`text-sm leading-relaxed ${
+                            fullArticle
+                              ? "text-gray-700 dark:text-gray-300"
+                              : "text-gray-500 dark:text-gray-400"
+                          }`}
+                        >
                           {getArticlePreview()}
                         </span>
                       </div>
@@ -255,7 +289,7 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                     <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#00DFB8]/5 via-[#00E6C7]/5 to-[#00DFB8]/5 opacity-0 group-hover/article:opacity-100 transition-opacity"></div>
                   </div>
                 </DialogTrigger>
-                
+
                 <DialogContent className="max-w-5xl max-h-[85vh] bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border-white/20 dark:border-slate-700/20 flex flex-col">
                   <DialogHeader>
                     <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400 bg-clip-text text-transparent">
@@ -273,7 +307,14 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full"></div>
                         <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
-                          {fullArticle ? `${fullArticle.trim().split(/\s+/).filter(word => word.length > 0).length} words` : 'No content yet'}
+                          {fullArticle
+                            ? `${
+                                fullArticle
+                                  .trim()
+                                  .split(/\s+/)
+                                  .filter((word) => word.length > 0).length
+                              } words`
+                            : "No content yet"}
                         </span>
                       </div>
                       <div className="flex gap-3">
@@ -301,9 +342,11 @@ export default function LandingPage({ onContinue, initialData = {} }) {
 
             {/* Next Button */}
             <div className="flex justify-end pt-8">
-              <Button 
-                size="lg" 
-                disabled={!title || !synopsis || (quotaStatus && !quotaStatus.allowed)}
+              <Button
+                size="lg"
+                disabled={
+                  !title || !synopsis || (quotaStatus && !quotaStatus.allowed)
+                }
                 onClick={handleNext}
                 className="px-8 py-3 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] hover:from-[#00B894] hover:via-[#00A085] hover:to-[#008B73] text-white border-0 rounded-xl shadow-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 group"
               >

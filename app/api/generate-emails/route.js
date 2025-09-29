@@ -1,10 +1,7 @@
-import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
-import { checkQuota, recordUsage } from '../../../lib/quotaTracker';
+import { checkQuota, recordUsage, parseRateLimitHeaders } from '../../../lib/quotaTracker';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const EMAIL_TEMPLATE = `Hi **XXX**,
 
@@ -27,7 +24,7 @@ export async function POST(request) {
 
   try {
     // CHECK QUOTA FIRST
-const quotaStatus = await checkQuota();
+    const quotaStatus = await checkQuota();
     
     if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
@@ -73,22 +70,37 @@ Requirements:
 
 Return only the summary text, no additional formatting or quotes.`;
 
-    const summaryResponse = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'user',
-          content: summaryPrompt,
-        },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.4,
+    const summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'user',
+            content: summaryPrompt
+          }
+        ],
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.4
+      })
     });
 
-    // Record summary generation usage
-    recordUsage(summaryResponse.usage.total_tokens);
-    console.log(`⚡ Summary generation: ${summaryResponse.usage.total_tokens} tokens`);
+    if (!summaryResponse.ok) {
+      const error = await summaryResponse.text();
+      throw new Error(`Groq API error: ${summaryResponse.status} - ${error}`);
+    }
 
-    const synopsisSummary = summaryResponse.choices[0].message.content.trim();
+    // Parse headers and record usage for summary
+    const summaryRateLimitHeaders = parseRateLimitHeaders(summaryResponse.headers);
+    const summaryData = await summaryResponse.json();
+    recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);
+    
+    console.log(`⚡ Summary generation: ${summaryData.usage?.total_tokens || 0} tokens`);
+
+    const synopsisSummary = summaryData.choices[0].message.content.trim();
     const summaryWordCount = synopsisSummary.split(/\s+/).length;
 
     console.log(`✅ Article summary created:`);
@@ -133,30 +145,43 @@ Return this exact text as JSON with proper line break encoding:
 REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
 
       try {
-        const response = await groq.chat.completions.create({
-          messages: [
-            {
-              role: 'system',
-              content: 'You follow templates exactly as instructed. You preserve all line breaks and formatting. You use \\n characters in JSON strings for line breaks.'
-            },
-            {
-              role: 'user',
-              content: userPrompt,
-            },
-          ],
-          model: 'llama-3.3-70b-versatile',
-          temperature: 0.1,
-          response_format: { type: 'json_object' },
+        const emailResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: 'system',
+                content: 'You follow templates exactly as instructed. You preserve all line breaks and formatting. You use \\n characters in JSON strings for line breaks.'
+              },
+              {
+                role: 'user',
+                content: userPrompt
+              }
+            ],
+            model: 'llama-3.3-70b-versatile',
+            temperature: 0.1,
+            response_format: { type: 'json_object' }
+          })
         });
 
-        // Record usage for this email
-        recordUsage(response.usage.total_tokens);
+        if (!emailResponse.ok) {
+          throw new Error(`Groq API error: ${emailResponse.status}`);
+        }
+
+        // Parse headers and record usage for each email
+        const emailRateLimitHeaders = parseRateLimitHeaders(emailResponse.headers);
+        const emailData = await emailResponse.json();
+        recordUsage(emailData.usage?.total_tokens || 0, emailRateLimitHeaders);
 
         const memberProcessingTime = Date.now() - memberStartTime;
         console.log(`     ✅ Response received (${memberProcessingTime}ms)`);
-        console.log(`     ⚡ Tokens used: ${response.usage.total_tokens}`);
+        console.log(`     ⚡ Tokens used: ${emailData.usage?.total_tokens || 0}`);
         
-        let emailContent = JSON.parse(response.choices[0].message.content);
+        let emailContent = JSON.parse(emailData.choices[0].message.content);
         
         emailContent.subject = "TPA Request";
         

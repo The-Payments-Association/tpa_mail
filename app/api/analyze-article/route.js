@@ -1,11 +1,8 @@
-import Groq from 'groq-sdk';
 import { membersDatabase } from '../../../lib/membersDatabase';
 import { NextResponse } from 'next/server';
-import { checkQuota, recordUsage } from '../../../lib/quotaTracker';
+import { checkQuota, recordUsage, parseRateLimitHeaders } from '../../../lib/quotaTracker';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 // STAGE 1: Pre-filter members using keyword matching (NO API CALL)
 function preFilterMembers(article, members, maxMembers = 25) {
@@ -70,7 +67,7 @@ export async function POST(request) {
 
   try {
     // CHECK QUOTA FIRST
-const quotaStatus = await checkQuota();
+    const quotaStatus = await checkQuota();
     
     if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
@@ -160,33 +157,52 @@ Rank the TOP 10 most relevant companies based on:
     console.log(`🎯 Model: llama-3.3-70b-versatile`);
     console.log(`👥 Members in AI analysis: ${membersContext.length}`);
 
-    // Call Groq API
-    const response = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert analyst in the payments and fintech industry. Return only valid JSON.'
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.3,
-      max_tokens: 3000,
-      response_format: { type: 'json_object' },
+    // Call Groq API using fetch to access headers
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert analyst in the payments and fintech industry. Return only valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.3,
+        max_tokens: 3000,
+        response_format: { type: 'json_object' }
+      })
     });
 
-    // RECORD USAGE AFTER SUCCESSFUL API CALL
-    const tokensUsed = response.usage.total_tokens;
-    const updatedQuota = recordUsage(tokensUsed);
+    if (!groqResponse.ok) {
+      const error = await groqResponse.text();
+      throw new Error(`Groq API error: ${groqResponse.status} - ${error}`);
+    }
+
+    // Parse rate limit headers from response
+    const rateLimitHeaders = parseRateLimitHeaders(groqResponse.headers);
+    console.log('\n📊 Rate limit headers:', rateLimitHeaders);
+
+    const responseData = await groqResponse.json();
+
+    // RECORD USAGE WITH HEADERS
+    const tokensUsed = responseData.usage?.total_tokens || 0;
+    const updatedQuota = recordUsage(tokensUsed, rateLimitHeaders);
 
     console.log('\n✅ GROQ RESPONSE RECEIVED:');
-    const responseContent = response.choices[0].message.content;
+    const responseContent = responseData.choices[0].message.content;
     console.log(`📏 Response length: ${responseContent.length} characters`);
     console.log(`⚡ Tokens used this request: ${tokensUsed}`);
     console.log(`📊 Updated quota: ${updatedQuota.tokensUsed}/${updatedQuota.tokensUsed + updatedQuota.tokensRemaining} tokens (${updatedQuota.percentageUsed}% used)`);
+    console.log(`📊 Groq reports: ${rateLimitHeaders.requestsRemaining} requests remaining, ${rateLimitHeaders.tokensRemaining} tokens remaining`);
 
     const recommendations = JSON.parse(responseContent);
     
