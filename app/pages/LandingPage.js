@@ -154,47 +154,46 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                   </div>
                 </DialogTrigger>
                 
-                <DialogContent className="max-w-5xl max-h-[85vh] bg-white/95 backdrop-blur-xl border-white/20">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                      Full article content
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="mt-6">
-                    <Textarea
-                      value={fullArticle}
-                      onChange={(e) => setFullArticle(e.target.value)}
-                      placeholder="Paste or type your full article content here (up to 2000 words)..."
-                      className="min-h-[450px] text-base bg-white/60 backdrop-blur-sm border-white/30 rounded-xl shadow-sm focus:bg-white/80 focus:border-[#00DFB8]/30 transition-all duration-300 placeholder:text-gray-400 resize-none"
-                      rows={22}
-                    />
-                    <div className="flex justify-between items-center mt-6">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full"></div>
-                        <span className="text-sm text-gray-600 font-medium">
-                          {fullArticle ? `${fullArticle.trim().split(/\s+/).filter(word => word.length > 0).length} words` : 'No content yet'}
-                        </span>
-                      </div>
-                      <div className="flex gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsArticleDialogOpen(false)}
-                          className="bg-white/50 backdrop-blur-sm border-white/30 hover:bg-white/70"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={handleArticleSave}
-                          className="bg-gradient-to-r from-[#00DFB8] to-[#00B894] hover:from-[#00B894] hover:to-[#00A085] text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
-                        >
-                          Save article
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </DialogContent>
+             <DialogContent className="max-w-5xl max-h-[85vh] bg-white/95 backdrop-blur-xl border-white/20 flex flex-col">
+  <DialogHeader>
+    <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+      Full article content
+    </DialogTitle>
+  </DialogHeader>
+  <div className="mt-6 flex-1 flex flex-col overflow-hidden">
+    <Textarea
+      value={fullArticle}
+      onChange={(e) => setFullArticle(e.target.value)}
+      placeholder="Paste or type your full article content here (up to 2000 words)..."
+      className="flex-1 text-base bg-white/60 backdrop-blur-sm border-white/30 rounded-xl shadow-sm focus:bg-white/80 focus:border-[#00DFB8]/30 transition-all duration-300 placeholder:text-gray-400 resize-none overflow-y-auto"
+    />
+    <div className="flex justify-between items-center mt-6 pt-4 border-t border-white/20 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <div className="w-2 h-2 bg-gradient-to-r from-[#00DFB8] to-[#00E6C7] rounded-full"></div>
+        <span className="text-sm text-gray-600 font-medium">
+          {fullArticle ? `${fullArticle.trim().split(/\s+/).filter(word => word.length > 0).length} words` : 'No content yet'}
+        </span>
+      </div>
+      <div className="flex gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsArticleDialogOpen(false)}
+          className="bg-white/50 backdrop-blur-sm border-white/30 hover:bg-white/70"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={handleArticleSave}
+          className="bg-gradient-to-r from-[#00DFB8] to-[#00B894] hover:from-[#00B894] hover:to-[#00A085] text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+        >
+          Save article
+        </Button>
+      </div>
+    </div>
+  </div>
+</DialogContent>
               </Dialog>
             </div>
 
