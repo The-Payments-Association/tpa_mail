@@ -66,8 +66,8 @@ export async function POST(request) {
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
   try {
-    // CHECK QUOTA FIRST
-    const quotaStatus = await checkQuota();
+    // CHECK QUOTA FIRST (synchronous function, no await needed)
+    const quotaStatus = checkQuota();
     
     if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
@@ -202,7 +202,11 @@ Rank the TOP 10 most relevant companies based on:
     console.log(`📏 Response length: ${responseContent.length} characters`);
     console.log(`⚡ Tokens used this request: ${tokensUsed}`);
     console.log(`📊 Updated quota: ${updatedQuota.tokensUsed}/${updatedQuota.tokensUsed + updatedQuota.tokensRemaining} tokens (${updatedQuota.percentageUsed}% used)`);
-    console.log(`📊 Groq reports: ${rateLimitHeaders.requestsRemaining} requests remaining, ${rateLimitHeaders.tokensRemaining} tokens remaining`);
+    
+    // Show what Groq reports if headers available
+    if (rateLimitHeaders) {
+      console.log(`📊 Groq reports: ${rateLimitHeaders.requestsRemaining} requests remaining, ${rateLimitHeaders.tokensRemaining} tokens remaining`);
+    }
 
     const recommendations = JSON.parse(responseContent);
     
