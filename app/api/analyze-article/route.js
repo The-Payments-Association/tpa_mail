@@ -66,7 +66,20 @@ export async function POST(request) {
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
   try {
-    // CHECK QUOTA FIRST (synchronous function, no await needed)
+    // VALIDATE API KEY FIRST
+    if (!GROQ_API_KEY) {
+      console.error('\n❌ GROQ_API_KEY MISSING');
+      console.error('📝 Please configure GROQ_API_KEY in Netlify environment variables');
+      
+      return NextResponse.json({ 
+        success: false, 
+        error: 'API configuration error',
+        details: 'GROQ_API_KEY environment variable is not configured. Please add it in Netlify site settings > Environment variables.',
+        configRequired: true
+      }, { status: 500 });
+    }
+
+    // CHECK QUOTA SECOND
     const quotaStatus = checkQuota();
     
     if (!quotaStatus.allowed) {
@@ -92,7 +105,31 @@ export async function POST(request) {
     console.log(`  Tokens: ${quotaStatus.tokensUsed}/${quotaStatus.tokensUsed + quotaStatus.tokensRemaining} (${quotaStatus.percentageUsed}% used)`);
     console.log(`  Requests: ${quotaStatus.requestsUsed}/${quotaStatus.requestsUsed + quotaStatus.requestsRemaining}`);
 
-    const { title, synopsis, fullArticle } = await request.json();
+    // VALIDATE REQUEST DATA
+    let title, synopsis, fullArticle;
+    
+    try {
+      const body = await request.json();
+      title = body.title;
+      synopsis = body.synopsis;
+      fullArticle = body.fullArticle;
+    } catch (parseError) {
+      console.error('\n❌ REQUEST PARSING ERROR:', parseError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid request format',
+        details: 'Request body must be valid JSON with title, synopsis, and fullArticle fields'
+      }, { status: 400 });
+    }
+
+    if (!title || !synopsis) {
+      console.error('\n❌ MISSING REQUIRED FIELDS');
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Missing required fields',
+        details: 'Both title and synopsis are required'
+      }, { status: 400 });
+    }
     
     console.log('\n📝 INPUT DATA:');
     console.log(`📰 Title: ${title}`);
@@ -112,7 +149,14 @@ export async function POST(request) {
       return NextResponse.json({ 
         success: true, 
         members: [],
-        message: 'No relevant members found for this article'
+        message: 'No relevant members found for this article',
+        meta: {
+          totalMembersInDatabase: membersDatabase.length,
+          preFilteredTo: 0,
+          finalRecommendations: 0,
+          tokensUsed: 0,
+          processingTime: Date.now() - startTime
+        }
       });
     }
 
@@ -158,33 +202,48 @@ Rank the TOP 10 most relevant companies based on:
     console.log(`👥 Members in AI analysis: ${membersContext.length}`);
 
     // Call Groq API using fetch to access headers
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert analyst in the payments and fintech industry. Return only valid JSON.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        model: 'llama-3.3-70b-versatile',
-        temperature: 0.3,
-        max_tokens: 3000,
-        response_format: { type: 'json_object' }
-      })
-    });
+    let groqResponse;
+    
+    try {
+      groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert analyst in the payments and fintech industry. Return only valid JSON.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.3,
+          max_tokens: 3000,
+          response_format: { type: 'json_object' }
+        })
+      });
+    } catch (fetchError) {
+      console.error('\n❌ NETWORK ERROR connecting to Groq API:', fetchError);
+      throw new Error(`Network error: ${fetchError.message}. Please check your internet connection.`);
+    }
 
     if (!groqResponse.ok) {
-      const error = await groqResponse.text();
-      throw new Error(`Groq API error: ${groqResponse.status} - ${error}`);
+      const errorText = await groqResponse.text();
+      console.error('\n❌ GROQ API ERROR RESPONSE:', errorText);
+      
+      if (groqResponse.status === 401) {
+        throw new Error('Invalid GROQ_API_KEY. Please check your API key configuration.');
+      } else if (groqResponse.status === 429) {
+        throw new Error('Groq API rate limit exceeded. Please try again later.');
+      } else {
+        throw new Error(`Groq API error (${groqResponse.status}): ${errorText}`);
+      }
     }
 
     // Parse rate limit headers from response
@@ -208,7 +267,15 @@ Rank the TOP 10 most relevant companies based on:
       console.log(`📊 Groq reports: ${rateLimitHeaders.requestsRemaining} requests remaining, ${rateLimitHeaders.tokensRemaining} tokens remaining`);
     }
 
-    const recommendations = JSON.parse(responseContent);
+    let recommendations;
+    
+    try {
+      recommendations = JSON.parse(responseContent);
+    } catch (jsonError) {
+      console.error('\n❌ JSON PARSING ERROR:', jsonError);
+      console.error('Response content:', responseContent);
+      throw new Error('Failed to parse AI response as JSON. The AI may have returned invalid format.');
+    }
     
     console.log('\n🏆 PARSED RECOMMENDATIONS:');
     console.log(`📊 Number of recommendations: ${recommendations.recommendations?.length || 0}`);
@@ -222,7 +289,7 @@ Rank the TOP 10 most relevant companies based on:
       });
     }
 
-    const enrichedRecommendations = recommendations.recommendations.map(rec => {
+    const enrichedRecommendations = (recommendations.recommendations || []).map(rec => {
       const member = membersDatabase.find(m => m.id === rec.id);
       return {
         ...member,
@@ -259,7 +326,7 @@ Rank the TOP 10 most relevant companies based on:
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
-    console.error('\n❌ GROQ API ERROR:');
+    console.error('\n❌ ARTICLE ANALYSIS ERROR:');
     console.error(`⏱️ Failed after: ${processingTime}ms`);
     console.error(`🚨 Error type: ${error.constructor.name}`);
     console.error(`📝 Error message: ${error.message}`);
@@ -269,7 +336,9 @@ Rank the TOP 10 most relevant companies based on:
     return NextResponse.json({ 
       success: false, 
       error: 'Failed to analyse article and find relevant members',
-      details: error.message 
+      details: error.message,
+      timestamp: new Date().toISOString(),
+      processingTime: processingTime
     }, { status: 500 });
   }
 }

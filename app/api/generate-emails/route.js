@@ -23,7 +23,20 @@ export async function POST(request) {
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
   try {
-    // CHECK QUOTA FIRST (synchronous function, no await needed)
+    // VALIDATE API KEY FIRST
+    if (!GROQ_API_KEY) {
+      console.error('\n❌ GROQ_API_KEY MISSING');
+      console.error('📝 Please configure GROQ_API_KEY in Netlify environment variables');
+      
+      return NextResponse.json({ 
+        success: false, 
+        error: 'API configuration error',
+        details: 'GROQ_API_KEY environment variable is not configured. Please add it in Netlify site settings > Environment variables.',
+        configRequired: true
+      }, { status: 500 });
+    }
+
+    // CHECK QUOTA SECOND
     const quotaStatus = checkQuota();
     
     if (!quotaStatus.allowed) {
@@ -47,7 +60,30 @@ export async function POST(request) {
     console.log(`\n📊 QUOTA STATUS:`);
     console.log(`  Tokens: ${quotaStatus.tokensUsed}/${quotaStatus.tokensUsed + quotaStatus.tokensRemaining} (${quotaStatus.percentageUsed}% used)`);
 
-    const { articleData, selectedMembers } = await request.json();
+    // VALIDATE REQUEST DATA
+    let articleData, selectedMembers;
+    
+    try {
+      const body = await request.json();
+      articleData = body.articleData;
+      selectedMembers = body.selectedMembers;
+    } catch (parseError) {
+      console.error('\n❌ REQUEST PARSING ERROR:', parseError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid request format',
+        details: 'Request body must be valid JSON with articleData and selectedMembers fields'
+      }, { status: 400 });
+    }
+
+    if (!articleData || !articleData.title || !selectedMembers || selectedMembers.length === 0) {
+      console.error('\n❌ MISSING REQUIRED FIELDS');
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Missing required fields',
+        details: 'Both articleData (with title) and selectedMembers (non-empty array) are required'
+      }, { status: 400 });
+    }
 
     console.log('\n📝 INPUT DATA:');
     console.log(`📰 Article: ${articleData.title}`);
@@ -70,32 +106,52 @@ Requirements:
 
 Return only the summary text, no additional formatting or quotes.`;
 
-    const summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'user',
-            content: summaryPrompt
-          }
-        ],
-        model: 'llama-3.3-70b-versatile',
-        temperature: 0.4
-      })
-    });
+    let summaryResponse;
+    
+    try {
+      summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: summaryPrompt
+            }
+          ],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.4
+        })
+      });
+    } catch (fetchError) {
+      console.error('\n❌ NETWORK ERROR connecting to Groq API (summary):', fetchError);
+      throw new Error(`Network error during summary generation: ${fetchError.message}. Please check your internet connection.`);
+    }
 
     if (!summaryResponse.ok) {
-      const error = await summaryResponse.text();
-      throw new Error(`Groq API error: ${summaryResponse.status} - ${error}`);
+      const errorText = await summaryResponse.text();
+      console.error('\n❌ GROQ API ERROR RESPONSE (summary):', errorText);
+      
+      if (summaryResponse.status === 401) {
+        throw new Error('Invalid GROQ_API_KEY. Please check your API key configuration.');
+      } else if (summaryResponse.status === 429) {
+        throw new Error('Groq API rate limit exceeded. Please try again later.');
+      } else {
+        throw new Error(`Groq API error during summary (${summaryResponse.status}): ${errorText}`);
+      }
     }
 
     // Parse headers and record usage for summary
     const summaryRateLimitHeaders = parseRateLimitHeaders(summaryResponse.headers);
     const summaryData = await summaryResponse.json();
+    
+    if (!summaryData.choices || !summaryData.choices[0]) {
+      throw new Error('Invalid response format from Groq API for summary generation');
+    }
+    
     recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);
     
     console.log(`⚡ Summary generation: ${summaryData.usage?.total_tokens || 0} tokens`);
@@ -109,14 +165,14 @@ Return only the summary text, no additional formatting or quotes.`;
 
     console.log('\n🎯 SELECTED MEMBERS FOR EMAIL GENERATION:');
     selectedMembers.forEach((member, index) => {
-      console.log(`  ${index + 1}. ${member.company}`);
+      console.log(`  ${index + 1}. ${member.company || member.name || 'Unknown'}`);
     });
 
     console.log('\n🔄 PROCESSING INDIVIDUAL EMAILS:');
 
     const emailPromises = selectedMembers.map(async (member, index) => {
       const memberStartTime = Date.now();
-      console.log(`\n  📧 ${index + 1}/${selectedMembers.length}: Processing ${member.company}`);
+      console.log(`\n  📧 ${index + 1}/${selectedMembers.length}: Processing ${member.company || member.name || 'Unknown'}`);
 
       const templateForPrompt = EMAIL_TEMPLATE
         .replace('{subject}', articleData.title)
@@ -145,45 +201,70 @@ Return this exact text as JSON with proper line break encoding:
 REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
 
       try {
-        const emailResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: 'system',
-                content: 'You follow templates exactly as instructed. You preserve all line breaks and formatting. You use \\n characters in JSON strings for line breaks.'
-              },
-              {
-                role: 'user',
-                content: userPrompt
-              }
-            ],
-            model: 'llama-3.3-70b-versatile',
-            temperature: 0.1,
-            response_format: { type: 'json_object' }
-          })
-        });
+        let emailResponse;
+        
+        try {
+          emailResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${GROQ_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You follow templates exactly as instructed. You preserve all line breaks and formatting. You use \\n characters in JSON strings for line breaks.'
+                },
+                {
+                  role: 'user',
+                  content: userPrompt
+                }
+              ],
+              model: 'llama-3.3-70b-versatile',
+              temperature: 0.1,
+              response_format: { type: 'json_object' }
+            })
+          });
+        } catch (fetchError) {
+          console.error(`     ❌ Network error for ${member.company || 'member'}:`, fetchError);
+          throw new Error(`Network error: ${fetchError.message}`);
+        }
 
         if (!emailResponse.ok) {
+          const errorText = await emailResponse.text();
+          console.error(`     ❌ Groq API error for ${member.company || 'member'}:`, errorText);
           throw new Error(`Groq API error: ${emailResponse.status}`);
         }
 
         // Parse headers and record usage for each email
         const emailRateLimitHeaders = parseRateLimitHeaders(emailResponse.headers);
         const emailData = await emailResponse.json();
+        
+        if (!emailData.choices || !emailData.choices[0]) {
+          throw new Error('Invalid response format from Groq API');
+        }
+        
         recordUsage(emailData.usage?.total_tokens || 0, emailRateLimitHeaders);
 
         const memberProcessingTime = Date.now() - memberStartTime;
         console.log(`     ✅ Response received (${memberProcessingTime}ms)`);
         console.log(`     ⚡ Tokens used: ${emailData.usage?.total_tokens || 0}`);
         
-        let emailContent = JSON.parse(emailData.choices[0].message.content);
+        let emailContent;
+        
+        try {
+          emailContent = JSON.parse(emailData.choices[0].message.content);
+        } catch (jsonError) {
+          console.error(`     ❌ JSON parsing error for ${member.company || 'member'}:`, jsonError);
+          throw new Error('Failed to parse email response as JSON');
+        }
         
         emailContent.subject = "TPA Request";
+        
+        if (!emailContent.body) {
+          throw new Error('Email body is missing from response');
+        }
         
         if (!emailContent.body.includes('\n') && !emailContent.body.includes('\\n')) {
           console.warn('     ⚠️ No line breaks detected, using fallback template');
@@ -211,7 +292,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
 
       } catch (memberError) {
         const memberProcessingTime = Date.now() - memberStartTime;
-        console.error(`     ❌ Failed for ${member.company} (${memberProcessingTime}ms)`);
+        console.error(`     ❌ Failed for ${member.company || member.name || 'Unknown'} (${memberProcessingTime}ms)`);
         console.error(`     📝 Error: ${memberError.message}`);
         
         const fallbackBody = EMAIL_TEMPLATE
@@ -264,7 +345,13 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
       synopsisSummary: synopsisSummary,
       quotaStatus: {
         percentageUsed: finalQuota.percentageUsed,
-        tokensRemaining: finalQuota.tokensRemaining
+        tokensRemaining: finalQuota.tokensRemaining,
+        requestsRemaining: finalQuota.requestsRemaining
+      },
+      meta: {
+        totalProcessingTime: totalProcessingTime,
+        successfulGenerations: generatedEmails.filter(e => !e.error).length,
+        failedGenerations: generatedEmails.filter(e => e.error).length
       }
     });
 
@@ -279,7 +366,10 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
     
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to generate commentary request emails' 
+      error: 'Failed to generate commentary request emails',
+      details: error.message,
+      timestamp: new Date().toISOString(),
+      processingTime: totalProcessingTime
     }, { status: 500 });
   }
 }
