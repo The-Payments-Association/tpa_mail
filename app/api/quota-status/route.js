@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getQuotaStatus } from '@/lib/quotaTracker';
 
 export async function GET() {
-  const status = getQuotaStatus();
+  const status = await getQuotaStatus();
   
   return NextResponse.json({
     success: true,

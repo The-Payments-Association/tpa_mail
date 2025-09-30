@@ -23,8 +23,8 @@ export async function POST(request) {
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
   try {
-    // CHECK QUOTA FIRST
-    const quotaStatus = await checkQuota();
+    // CHECK QUOTA FIRST (synchronous function, no await needed)
+    const quotaStatus = checkQuota();
     
     if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
