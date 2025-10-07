@@ -5,11 +5,12 @@ import LandingPage from "./LandingPage";
 import MemberSelection from "./MemberSelection";
 import EmailTemplates from "./EmailTemplates";
 import SearchMembers from "./SearchMembers";
+import PreScreen from "@/components/PreScreen"; // new import
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 
 export default function TPAMailFlow() {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // 0 = PreScreen
   const [showSearch, setShowSearch] = useState(false);
   const [articleData, setArticleData] = useState({
     title: "",
@@ -24,39 +25,36 @@ export default function TPAMailFlow() {
     setCurrentStep(2);
   };
 
-  const handleBackToLanding = () => {
-    setCurrentStep(1);
-  };
-
+  const handleBackToLanding = () => setCurrentStep(1);
   const handleContinueFromMembers = (members) => {
     setSelectedMembers(members);
     setCurrentStep(3);
   };
-
-  const handleBackToMembers = () => {
-    setCurrentStep(2);
-  };
-
+  const handleBackToMembers = () => setCurrentStep(2);
   const handleContinueFromEmailTemplates = (templates) => {
     setEmailTemplates(templates);
     setCurrentStep(4);
   };
+  const handleBackToEmailTemplates = () => setCurrentStep(3);
 
-  const handleBackToEmailTemplates = () => {
-    setCurrentStep(3);
-  };
+  // Search modal
+  if (showSearch) return <SearchMembers onBack={() => setShowSearch(false)} />;
 
-  // Show search modal
-  if (showSearch) {
-    return <SearchMembers onBack={() => setShowSearch(false)} />;
+  // Pre-screen
+  if (currentStep === 0) {
+    return (
+      <PreScreen
+        onStartEmailFlow={() => setCurrentStep(1)}
+        onSearchMembers={() => setShowSearch(true)}
+      />
+    );
   }
 
-  // Render current step
+  // Flow steps
   switch (currentStep) {
     case 1:
       return (
         <div className="relative">
-          {/* Search Button - Fixed Position */}
           <div className="fixed bottom-6 right-6 z-50">
             <Button
               onClick={() => setShowSearch(true)}
@@ -73,10 +71,10 @@ export default function TPAMailFlow() {
           />
         </div>
       );
+
     case 2:
       return (
         <div className="relative">
-          {/* Search Button - Fixed Position */}
           <div className="fixed bottom-6 right-6 z-50">
             <Button
               onClick={() => setShowSearch(true)}
@@ -99,6 +97,7 @@ export default function TPAMailFlow() {
           />
         </div>
       );
+
     case 3:
       return (
         <EmailTemplates
@@ -108,6 +107,7 @@ export default function TPAMailFlow() {
           onContinue={handleContinueFromEmailTemplates}
         />
       );
+
     case 4:
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 p-6 flex items-centre justify-centre">
@@ -148,7 +148,8 @@ export default function TPAMailFlow() {
           </div>
         </div>
       );
+
     default:
-      return <LandingPage onContinue={handleContinueFromLanding} />;
+      return null;
   }
 }
