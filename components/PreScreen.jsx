@@ -68,18 +68,18 @@ export default function PreScreen({ onStartEmailFlow, onStartInterviewFlow, onSe
             <TPAMailLogo />
 
             <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-              className="text-center"
-            >
-              <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                What would you like to do today?
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                Choose your workflow to get started
-              </p>
-            </motion.div>
+  initial={{ y: 20, opacity: 0 }}
+  animate={{ y: 0, opacity: 1 }}
+  transition={{ delay: 0.4, duration: 0.5 }}
+  className="text-center"
+>
+  <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+    TPA Helper
+  </h2>
+  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+    Create personalised commentary emails, generate member interview questions, or search the member directory.
+  </p>
+</motion.div>
           </div>
 
           {/* Content */}
