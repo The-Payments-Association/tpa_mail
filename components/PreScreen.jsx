@@ -3,7 +3,13 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Search, Sparkles, ArrowRight, MessageSquare } from "lucide-react";
+import {
+  Mail,
+  Search,
+  Sparkles,
+  ArrowRight,
+  MessageSquare,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TPAMailLogo = () => (
@@ -43,7 +49,11 @@ const TPAMailLogo = () => (
   </div>
 );
 
-export default function PreScreen({ onStartEmailFlow, onStartInterviewFlow, onSearchMembers }) {
+export default function PreScreen({
+  onStartEmailFlow,
+  onStartInterviewFlow,
+  onSearchMembers,
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 dark:from-slate-900 dark:via-teal-950/30 dark:to-emerald-950/20 p-6 transition-colors duration-300 flex items-center justify-center">
       {/* Background Pattern */}
@@ -68,18 +78,19 @@ export default function PreScreen({ onStartEmailFlow, onStartInterviewFlow, onSe
             <TPAMailLogo />
 
             <motion.div
-  initial={{ y: 20, opacity: 0 }}
-  animate={{ y: 0, opacity: 1 }}
-  transition={{ delay: 0.4, duration: 0.5 }}
-  className="text-center"
->
-  <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
-    TPA Helper
-  </h2>
-  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-    Create personalised commentary emails, generate member interview questions, or search the member directory.
-  </p>
-</motion.div>
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="text-center"
+            >
+              <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                Mail Helper
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                Create personalised commentary emails, generate member interview
+                questions, or search the member directory.
+              </p>
+            </motion.div>
           </div>
 
           {/* Content */}
@@ -124,7 +135,7 @@ export default function PreScreen({ onStartEmailFlow, onStartInterviewFlow, onSe
                 <Badge className="absolute -top-2 -right-2 z-10 bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-lg px-2 py-0.5 text-xs font-semibold">
                   BETA
                 </Badge>
-                
+
                 <Button
                   onClick={onStartInterviewFlow}
                   variant="outline"
@@ -137,7 +148,9 @@ export default function PreScreen({ onStartEmailFlow, onStartInterviewFlow, onSe
                         <MessageSquare className="w-6 h-6 text-[#00B894] dark:text-[#00DFB8]" />
                       </div>
                       <div className="text-left">
-                        <div className="font-semibold">Start interview flow</div>
+                        <div className="font-semibold">
+                          Start interview flow
+                        </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 font-normal">
                           Generate personalised questions for members
                         </div>
