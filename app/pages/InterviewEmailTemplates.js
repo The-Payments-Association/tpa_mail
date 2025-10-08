@@ -16,6 +16,7 @@ import {
   Loader2,
   AlertTriangle,
   MessageSquare,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -49,6 +50,53 @@ const TPAMailLogo = () => (
   </div>
 );
 
+// Email validation function
+const validateEmail = (template) => {
+  const issues = [];
+  const warnings = [];
+
+  // Critical issues (must fix)
+  if (template.body.includes("**XXX**") || template.body.includes("XXX")) {
+    issues.push("Contains placeholder **XXX** that needs to be replaced");
+  }
+
+  if (!template.body.includes("Hi ")) {
+    issues.push("Missing greeting");
+  }
+
+  // Warnings (should review)
+  if (template.body.length < 200) {
+    warnings.push("Email seems quite short (under 200 characters)");
+  }
+
+  if (template.body.length > 1200) {
+    warnings.push("Email is quite long (over 1200 characters) - consider shortening");
+  }
+
+  const wordCount = template.body.split(/\s+/).filter((w) => w.length > 0).length;
+  if (wordCount < 60) {
+    warnings.push(`Email has only ${wordCount} words - consider adding more detail`);
+  }
+
+  if (!template.body.toLowerCase().includes("article")) {
+    warnings.push("No mention of 'article' found");
+  }
+
+  if (!template.body.toLowerCase().includes("deadline")) {
+    warnings.push("No deadline mentioned in email");
+  }
+
+  // Check if question is still generic/placeholder
+  if (
+    template.body.toLowerCase().includes("how will this impact") ||
+    template.body.toLowerCase().includes("what are your thoughts")
+  ) {
+    warnings.push("Question may be too generic - consider making it more specific");
+  }
+
+  return { issues, warnings };
+};
+
 export default function InterviewEmailTemplates({
   articleData = {},
   selectedMembers = [],
@@ -58,10 +106,16 @@ export default function InterviewEmailTemplates({
   const [emailTemplates, setEmailTemplates] = useState([]);
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
   const hasGeneratedRef = useRef(false);
 
   const currentTemplate = emailTemplates[currentEmailIndex];
   const totalEmails = emailTemplates.length;
+
+  // Get validation results for current template
+  const validationResults = currentTemplate
+    ? validateEmail(currentTemplate.template)
+    : { issues: [], warnings: [] };
 
   // Auto-generate on mount - only once
   useEffect(() => {
@@ -91,7 +145,12 @@ export default function InterviewEmailTemplates({
       const data = await response.json();
 
       if (data.success) {
-        setEmailTemplates(data.emails);
+        // Store original question for each template
+        const templatesWithOriginal = data.emails.map(email => ({
+          ...email,
+          originalQuestion: email.generatedQuestion
+        }));
+        setEmailTemplates(templatesWithOriginal);
         toast.success("Interview requests generated!", {
           description: `Created ${data.emails.length} personalised questions`,
           duration: 3000,
@@ -123,26 +182,51 @@ export default function InterviewEmailTemplates({
 
   const updateQuestion = (value) => {
     setEmailTemplates((prev) =>
-      prev.map((template, index) =>
-        index === currentEmailIndex
-          ? {
-              ...template,
-              generatedQuestion: value,
-              template: {
-                ...template.template,
-                body: template.template.body.replace(
-                  /\*\*(.+?)\*\*/g, // Find text between **
-                  `**${value}**`
-                ),
-              },
-              isEdited: true,
-            }
-          : template
-      )
+      prev.map((template, index) => {
+        if (index !== currentEmailIndex) return template;
+
+        // Find and replace ONLY the specific question text in the body
+        // We use the original question to find the exact text to replace
+        const oldQuestion = template.generatedQuestion;
+        const newBody = template.template.body.replace(
+          `**${oldQuestion}**`,
+          `**${value}**`
+        );
+
+        return {
+          ...template,
+          generatedQuestion: value,
+          template: {
+            ...template.template,
+            body: newBody,
+          },
+          isEdited: true,
+        };
+      })
     );
   };
 
+  const copyToClipboard = async (text, fieldName) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      toast.success(`${fieldName} copied to clipboard`);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      toast.error("Failed to copy to clipboard");
+    }
+  };
+
   const handleApproveEmail = () => {
+    // Check for critical validation issues
+    if (validationResults.issues.length > 0) {
+      toast.error("Cannot approve email with validation errors", {
+        description: "Please fix all critical issues first",
+        duration: 4000,
+      });
+      return;
+    }
+
     setEmailTemplates((prev) =>
       prev.map((template, index) =>
         index === currentEmailIndex
@@ -153,9 +237,12 @@ export default function InterviewEmailTemplates({
 
     if (currentEmailIndex < totalEmails - 1) {
       setCurrentEmailIndex(currentEmailIndex + 1);
-      toast.success("Interview request approved!");
+      toast.success("Interview request approved! Moving to next...");
     } else {
-      toast.success("All interview requests reviewed!");
+      toast.success("All interview requests reviewed!", {
+        description: "Ready to proceed to final step",
+        duration: 3000,
+      });
     }
   };
 
@@ -231,7 +318,7 @@ export default function InterviewEmailTemplates({
                   Review interview requests
                 </h2>
                 <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                  Each email includes a personalised question based on the member's expertise
+                  Each email includes a personalised thought leadership question
                 </p>
               </div>
               <div className="text-right">
@@ -357,12 +444,69 @@ export default function InterviewEmailTemplates({
                   </Button>
                 </div>
 
+                {/* Validation Warnings */}
+                {(validationResults.issues.length > 0 ||
+                  validationResults.warnings.length > 0) && (
+                  <div
+                    className={`rounded-lg p-4 border ${
+                      validationResults.issues.length > 0
+                        ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                        : "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+                    }`}
+                  >
+                    <h4
+                      className={`text-sm font-semibold mb-2 flex items-center gap-2 ${
+                        validationResults.issues.length > 0
+                          ? "text-red-800 dark:text-red-400"
+                          : "text-yellow-800 dark:text-yellow-400"
+                      }`}
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                      {validationResults.issues.length > 0
+                        ? "Critical issues"
+                        : "Warnings"}
+                    </h4>
+
+                    {validationResults.issues.length > 0 && (
+                      <ul className="text-sm text-red-700 dark:text-red-400 space-y-1 mb-2">
+                        {validationResults.issues.map((issue, idx) => (
+                          <li key={idx}>• {issue}</li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {validationResults.warnings.length > 0 && (
+                      <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
+                        {validationResults.warnings.map((warning, idx) => (
+                          <li key={idx}>• {warning}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
                 {/* AI-Generated Question */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-[#00DFB8]" />
-                    AI-generated interview question
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-[#00DFB8]" />
+                      AI-generated interview question
+                    </label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        copyToClipboard(currentTemplate.generatedQuestion, "Question")
+                      }
+                      className="h-7 px-2"
+                    >
+                      {copiedField === "Question" ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
                   <div className="p-4 bg-[#00DFB8]/5 dark:bg-[#00DFB8]/10 border border-[#00DFB8]/20 rounded-xl">
                     <Textarea
                       value={currentTemplate.generatedQuestion}
@@ -372,34 +516,93 @@ export default function InterviewEmailTemplates({
                     />
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    💡 This question was generated based on {currentTemplate.member.company}'s expertise in{" "}
+                    💡 This thought leadership question was generated based on {currentTemplate.member.company}'s expertise in{" "}
                     {currentTemplate.member.expertise.slice(0, 2).join(" and ")}
                   </p>
                 </div>
 
                 {/* Subject Line */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                    Subject line
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                      Subject line
+                    </label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        copyToClipboard(currentTemplate.template.subject, "Subject")
+                      }
+                      className="h-7 px-2"
+                    >
+                      {copiedField === "Subject" ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
                   <input
                     type="text"
                     value={currentTemplate.template.subject}
                     onChange={(e) => updateTemplate("subject", e.target.value)}
-                    className="w-full px-4 py-3 text-base bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border border-white/30 dark:border-slate-600/30 rounded-xl"
+                    className="w-full px-4 py-3 text-base bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border border-white/30 dark:border-slate-600/30 rounded-xl shadow-sm hover:bg-white/70 dark:hover:bg-slate-700/70 focus:bg-white/80 dark:focus:bg-slate-700/80 focus:border-[#00DFB8]/30 transition-all duration-300"
                   />
                 </div>
 
                 {/* Email Body */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                    Email content
-                  </label>
-                  <Textarea
-                    value={currentTemplate.template.body}
-                    onChange={(e) => updateTemplate("body", e.target.value)}
-                    className="min-h-[500px] whitespace-pre-wrap"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                      Email content
+                    </label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        copyToClipboard(currentTemplate.template.body, "Email content")
+                      }
+                      className="h-7 px-2"
+                    >
+                      {copiedField === "Email content" ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="relative">
+                    <Textarea
+                      value={currentTemplate.template.body}
+                      onChange={(e) => updateTemplate("body", e.target.value)}
+                      className="min-h-[500px] whitespace-pre-wrap"
+                    />
+                    <div className="absolute bottom-4 right-4">
+                      <Badge
+                        variant="outline"
+                        className="bg-white/70 dark:bg-slate-600/70 border-gray-200 dark:border-slate-500"
+                      >
+                        {
+                          (currentTemplate?.template?.body || "")
+                            .split(" ")
+                            .filter((w) => w.length > 0).length
+                        }{" "}
+                        words
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fields to Fill Warning */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-400 mb-2">
+                    📝 Remember to update:
+                  </h4>
+                  <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                    <li>• Specific contact name and role (replace **XXX**)</li>
+                    <li>• Any deadline dates marked with **XXX**</li>
+                    <li>• Ensure question is thought leadership focused (not sales)</li>
+                  </ul>
                 </div>
 
                 {/* Approve Button */}
@@ -412,7 +615,8 @@ export default function InterviewEmailTemplates({
                   ) : (
                     <Button
                       onClick={handleApproveEmail}
-                      className="px-6 py-3 bg-gradient-to-r from-[#00DFB8] to-[#00B894] hover:from-[#00B894] hover:to-[#00A085] text-white border-0 rounded-xl shadow-lg"
+                      disabled={validationResults.issues.length > 0}
+                      className="px-6 py-3 bg-gradient-to-r from-[#00DFB8] to-[#00B894] hover:from-[#00B894] hover:to-[#00A085] text-white border-0 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Check className="w-4 h-4 mr-2" />
                       Approve & continue
@@ -437,7 +641,7 @@ export default function InterviewEmailTemplates({
                 size="lg"
                 onClick={handleContinue}
                 disabled={approvedCount < totalEmails}
-                className="px-8 py-3 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] hover:from-[#00B894] hover:via-[#00A085] hover:to-[#008B73] text-white border-0 rounded-xl shadow-lg disabled:opacity-50"
+                className="px-8 py-3 bg-gradient-to-r from-[#00DFB8] via-[#00B894] to-[#00A085] hover:from-[#00B894] hover:via-[#00A085] hover:to-[#008B73] text-white border-0 rounded-xl shadow-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
               >
                 <span className="flex items-center gap-2">
                   Continue to review
