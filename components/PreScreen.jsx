@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Mail, Search, Sparkles, ArrowRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Mail, Search, Sparkles, ArrowRight, MessageSquare } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TPAMailLogo = () => (
@@ -42,7 +43,7 @@ const TPAMailLogo = () => (
   </div>
 );
 
-export default function PreScreen({ onStartEmailFlow, onSearchMembers }) {
+export default function PreScreen({ onStartEmailFlow, onStartInterviewFlow, onSearchMembers }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-emerald-100/20 dark:from-slate-900 dark:via-teal-950/30 dark:to-emerald-950/20 p-6 transition-colors duration-300 flex items-center justify-center">
       {/* Background Pattern */}
@@ -112,11 +113,46 @@ export default function PreScreen({ onStartEmailFlow, onSearchMembers }) {
                 </Button>
               </motion.div>
 
-              {/* Search Members Button */}
+              {/* Interview Flow Button with Beta Badge */}
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.6, duration: 0.5 }}
+                className="relative"
+              >
+                {/* Beta Badge */}
+                <Badge className="absolute -top-2 -right-2 z-10 bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-lg px-2 py-0.5 text-xs font-semibold">
+                  BETA
+                </Badge>
+                
+                <Button
+                  onClick={onStartInterviewFlow}
+                  variant="outline"
+                  className="w-full h-20 text-lg bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border-white/30 dark:border-slate-600/30 hover:bg-white/70 dark:hover:bg-slate-700/70 hover:border-[#00E6C7]/30 text-gray-700 dark:text-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 group relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#00E6C7]/0 via-[#00E6C7]/5 to-[#00E6C7]/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <div className="relative flex items-center justify-between w-full px-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-[#00E6C7]/20 to-[#00DFB8]/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                        <MessageSquare className="w-6 h-6 text-[#00B894] dark:text-[#00DFB8]" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold">Start interview flow</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 font-normal">
+                          Generate personalised questions for members
+                        </div>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-[#00B894] group-hover:translate-x-1 transition-all" />
+                  </div>
+                </Button>
+              </motion.div>
+
+              {/* Search Members Button */}
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.7, duration: 0.5 }}
               >
                 <Button
                   onClick={onSearchMembers}
@@ -141,9 +177,6 @@ export default function PreScreen({ onStartEmailFlow, onSearchMembers }) {
                 </Button>
               </motion.div>
             </div>
-
-            {/* Feature Highlights */}
-           
           </div>
         </div>
 
