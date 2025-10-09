@@ -15,7 +15,7 @@ import {
   SlidersHorizontal,
   Plus,
 } from "lucide-react";
-import { membersDatabase } from "@/lib/membersDatabase";
+import { membersDatabase } from "@/lib/membersDatabase.fixed.backup.js";
 import CompanyProfileModal from "./CompanyProfileModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -79,6 +79,46 @@ export default function SearchMembers({ onBack }) {
     };
   }, []);
 
+  
+// // Temporary - find invalid members
+// console.log('=== DATABASE VALIDATION ===');
+// const invalidMembers = membersDatabase.filter(m => {
+//   return !m.company || 
+//          !m.expertise || 
+//          !m.interests || 
+//          !m.bio;
+// });
+
+// if (invalidMembers.length > 0) {
+//   console.log('Found invalid members:');
+//   invalidMembers.forEach(m => {
+//     console.log({
+//       id: m.id,
+//       company: m.company || 'MISSING',
+//       hasExpertise: !!m.expertise,
+//       hasInterests: !!m.interests,
+//       hasBio: !!m.bio,
+//       fullEntry: m  // This will show the complete entry
+//     });
+//   });
+//   if (invalidMembers.length > 0) {
+//   console.log('Found invalid members:');
+//   invalidMembers.forEach(m => {
+//     console.log('FULL INVALID ENTRY:', JSON.stringify(m, null, 2));
+//   });
+// }
+// }
+
+console.log('=== FINDING INVALID ENTRY POSITION ===');
+membersDatabase.forEach((member, index) => {
+  if (!member.id || !member.company || !member.expertise || !member.interests || !member.bio) {
+    console.log(`Found invalid entry at INDEX: ${index}`);
+    console.log('Full entry:', JSON.stringify(member, null, 2));
+  }
+});
+
+
+
   // Handle adding search term
   const handleAddSearchTerm = (e) => {
     if (e.key === "Enter" && currentSearchInput.trim()) {
@@ -98,6 +138,10 @@ export default function SearchMembers({ onBack }) {
   // Enhanced search logic with filters and multi-search
   const searchResults = useMemo(() => {
     let results = membersDatabase;
+
+    console.log('Invalid members:', membersDatabase.filter(m => !m.company));
+    console.log('Total members:', membersDatabase.length);
+
 
     // Apply expertise filter
     if (selectedExpertise.length > 0) {
@@ -463,7 +507,9 @@ export default function SearchMembers({ onBack }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {searchResults.map((member) => (
+                  {searchResults
+  .filter((member) => member.company) // Only include members with a company name
+  .map((member) => (
                     <Card
                       key={member.id}
                       onClick={() => handleCompanyClick(member)}
@@ -472,7 +518,7 @@ export default function SearchMembers({ onBack }) {
                       <CardContent className="p-4">
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-10 bg-gradient-to-br from-[#00DFB8] to-[#00B894] rounded-lg flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-                            {member.company.substring(0, 2).toUpperCase()}
+{member.company?.substring(0, 2).toUpperCase() || '??'}
                           </div>
 
                           <div className="flex-1 min-w-0">

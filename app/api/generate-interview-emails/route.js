@@ -3,25 +3,25 @@ import { checkQuota, recordUsage, parseRateLimitHeaders } from '../../../lib/quo
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const INTERVIEW_EMAIL_TEMPLATE = `Hi **XXX**,
+const INTERVIEW_EMAIL_TEMPLATE = `Dear **XXX**,
 
-I'm a data journalist at The Payments Association. I'm writing to offer you the opportunity to provide commentary for my article on {subject}.
+I’m a data journalist at The Payments Association, preparing a feature for Payments Intelligence — our members-only intelligence platform for senior leaders across the payments ecosystem.
 
-{article_summary}
+This piece explores {subject}, examining {article_summary} It will combine our proprietary data with expert commentary from key industry figures.
 
-Given your expertise in this area, I'd value your perspective on the following question:
+Given your experience in {member_expertise}, I'd value your perspective on the following question:
 
-* {generated_question}
+{generated_question}
 
-Your response (~50-100 words) would be featured in the 'Industry Voices' section of the article, alongside your name, job title and company.
+Your response (around 50–100 words) would appear as a pullout quote in the article, alongside your name, title, and company, and will be shared with senior executives, policymakers, and partners across The Payments Association's 250+ member companies, including banks, PSPs, acquirers, fintechs, and law firms.
 
-This article will be featured in Payments Intelligence, TPA's member-only publication aimed at senior leaders across our membership base. You can read all reports and articles here: https://thepaymentsassociation.org/hub/payments-intelligence/. The article will also be promoted through our social media channels.
+You can view previous reports and articles here: https://thepaymentsassociation.org/hub/payments-intelligence/
 
 The deadline for responses is **XXX**
 
-Spaces are limited, so please let me know if you are interested, as I can pass the opportunity on if this one isn't quite right. I'd be happy to provide any additional information or context you might need.
+If this topic isn't quite right, I'd be happy to keep you in mind for future opportunities — we regularly feature perspectives on market trends, regulation, and innovation.
 
-Many thanks,`;
+Kind regards,`;
 
 export async function POST(request) {
   const startTime = Date.now();
@@ -82,22 +82,22 @@ export async function POST(request) {
     console.log(`📰 Article: ${articleData.title}`);
     console.log(`👥 Selected members: ${selectedMembers.length}`);
 
-    // STEP 1: Create article summary
+    // STEP 1: Create article summary (1-2 lines that work after "examining")
     console.log('\n📝 CREATING ARTICLE SUMMARY...');
-    const summaryPrompt = `Create a concise, engaging summary for use in a professional interview request email. The summary should follow the phrase "The article" and be written in a clear, professional tone that demonstrates the article's relevance and value.
+    const summaryPrompt = `Create a concise 1-2 line summary for a professional intelligence report email. This summary will appear after the phrase "This piece explores [article title], examining" — so it should flow naturally from that.
 
 Original synopsis:
 "${articleData.synopsis}"
 
 Requirements:
-- Maximum 50 words (aim for 35-45)
-- Should start naturally after "The article" (e.g., "explores...", "examines...", "analyses...", "investigates...")
-- Professional yet engaging tone
-- Focus on the key insight, trend, or development
-- Highlight why this topic matters to the payments industry
+- 1-2 lines maximum (aim for 20-35 words)
+- Should work grammatically after "examining" (e.g., "the regulatory impact on...", "how emerging trends are...", "key data insights revealing...")
+- Professional, analytical tone suited for senior executives
+- Focus on what the article examines/analyses/reveals
 - Use UK English spelling
+- No full stop at the end (the template adds "It will combine..." after this)
 
-Return only the summary text, no additional formatting or quotes.`;
+Return only the summary text that follows "examining", no additional formatting or quotes.`;
 
     let summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -120,7 +120,13 @@ Return only the summary text, no additional formatting or quotes.`;
     const summaryData = await summaryResponse.json();
     recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);
     
-    const synopsisSummary = summaryData.choices[0].message.content.trim();
+    let synopsisSummary = summaryData.choices[0].message.content.trim();
+    
+    // Remove trailing full stop if present (template will add "It will combine..." after)
+    if (synopsisSummary.endsWith('.')) {
+      synopsisSummary = synopsisSummary.slice(0, -1);
+    }
+    
     console.log(`✅ Summary created: "${synopsisSummary}"`);
 
     // STEP 2: Generate personalised thought leadership questions for each member
@@ -129,43 +135,53 @@ Return only the summary text, no additional formatting or quotes.`;
     const emailPromises = selectedMembers.map(async (member, index) => {
       console.log(`\n  📧 ${index + 1}/${selectedMembers.length}: Processing ${member.company}`);
 
+      // Extract member expertise
+      let memberExpertise = 'this area';
+      if (member.expertise && Array.isArray(member.expertise) && member.expertise.length > 0) {
+        memberExpertise = member.expertise.join(', ');
+      } else if (member.marketSegments && Array.isArray(member.marketSegments) && member.marketSegments.length > 0) {
+        memberExpertise = member.marketSegments.join(', ');
+      }
+      console.log(`     👤 Expertise: ${memberExpertise}`);
+
       // Generate thought leadership question based on member's area of expertise
-      const questionPrompt = `You are an expert journalist seeking thought leadership commentary for a payments industry article.
+      const questionPrompt = `You are an expert journalist seeking thought leadership commentary for a payments industry intelligence report aimed at senior executives.
 
 Article title: "${articleData.title}"
 Article synopsis: "${articleData.synopsis}"
 
 Expert's background:
-- Area of expertise: ${member.expertise?.join(', ')}
+- Area of expertise: ${member.expertise?.join(', ') || 'General payments'}
 - Market focus: ${member.marketSegments?.join(', ') || 'General'}
 - Geographic perspective: ${member.geographicFocus?.join(', ') || 'Global'}
 
-Generate ONE thought-provoking question (25-40 words) that:
+Generate ONE precise, senior-level, strategic question (25-40 words) that:
 
 CRITICAL - THOUGHT LEADERSHIP FOCUS:
-1. Asks about INDUSTRY-WIDE implications, not company-specific solutions
-2. Encourages strategic analysis and forward-thinking perspective
+1. Asks about INDUSTRY-WIDE strategic implications, not company-specific solutions
+2. Encourages high-level analysis suitable for C-suite executives
 3. Seeks insights on trends, challenges, or opportunities facing THE SECTOR
 4. Avoids language that would prompt product/service promotion
-5. Focuses on "what should the industry consider" rather than "what does your company offer"
+5. Uses precise, strategic language appropriate for senior leaders
+6. Focuses on "what should the industry consider" rather than "what does your company offer"
 
 The question should:
 - Be relevant to their area of expertise (but ask about the broader industry, not their company)
-- Encourage analytical, objective commentary
+- Encourage analytical, objective commentary from a senior strategic perspective
 - Inspire a thoughtful 50-100 word response
-- Use professional journalistic tone
-- Focus on implications, strategic considerations, or future outlook
+- Use professional, executive-level tone
+- Focus on strategic implications, policy considerations, or market evolution
 
-Examples of GOOD thought leadership questions:
-- "What are the key strategic considerations the industry should prioritise as [development] unfolds?"
-- "Looking ahead, what challenges might this create for [sector] over the next 12-18 months?"
-- "From a regulatory perspective, what implications should stakeholders be aware of?"
-- "How might this shift impact consumer behaviour and industry dynamics?"
+Examples of GOOD thought leadership questions for senior audiences:
+- "What are the key strategic considerations financial institutions should prioritise as this regulation evolves?"
+- "From a market dynamics perspective, how might this shift reshape competitive positioning over the next 18-24 months?"
+- "What policy implications should industry leaders be considering in response to these developments?"
+- "How should senior executives be thinking about the risk-opportunity balance in this emerging trend?"
 
-Examples of BAD questions (too sales-focused):
+Examples of BAD questions (too tactical or sales-focused):
 - "How is your company addressing this challenge?" ❌
 - "What solutions does your organisation offer for this?" ❌
-- "How does your platform handle this situation?" ❌
+- "What features should providers implement?" ❌
 
 Return ONLY the question text, no preamble or explanation.`;
 
@@ -180,7 +196,7 @@ Return ONLY the question text, no preamble or explanation.`;
             messages: [
               {
                 role: 'system',
-                content: 'You are an expert journalist who creates thought-provoking questions that inspire industry-level insights, not promotional responses. Your questions focus on trends, implications, and strategic considerations for the broader payments industry.'
+                content: 'You are an expert journalist who creates precise, strategic questions for senior executives. Your questions inspire industry-level insights and strategic analysis, not promotional responses. You write for C-suite audiences in the payments sector.'
               },
               {
                 role: 'user',
@@ -203,20 +219,22 @@ Return ONLY the question text, no preamble or explanation.`;
         const generatedQuestion = questionData.choices[0].message.content.trim();
         console.log(`     ✅ Question generated: "${generatedQuestion.substring(0, 80)}..."`);
 
-        // Build the email body with the generated question
+        // Build the email body with the generated question and member expertise
         const emailBody = INTERVIEW_EMAIL_TEMPLATE
           .replace('{subject}', articleData.title)
-          .replace('{article_summary}', `The article ${synopsisSummary}`)
+          .replace('{article_summary}', synopsisSummary)
+          .replace('{member_expertise}', memberExpertise)
           .replace('{generated_question}', generatedQuestion);
 
         return {
           memberId: member.id,
           member: member,
           template: {
-            subject: "TPA Interview Request",
+            subject: "Payments Intelligence feature request",
             body: emailBody
           },
           generatedQuestion: generatedQuestion,
+          memberExpertise: memberExpertise,
           isEdited: false,
           isApproved: false,
           synopsisSummary: synopsisSummary
@@ -226,21 +244,23 @@ Return ONLY the question text, no preamble or explanation.`;
         console.error(`     ❌ Failed for ${member.company}:`, memberError.message);
         
         // Fallback with generic thought leadership question
-        const fallbackQuestion = `What are the key strategic implications of ${articleData.title.toLowerCase()} for the payments industry over the next 12-18 months?`;
+        const fallbackQuestion = `What are the key strategic implications of ${articleData.title.toLowerCase()} for senior leaders in the payments industry over the next 18-24 months?`;
         
         const fallbackBody = INTERVIEW_EMAIL_TEMPLATE
           .replace('{subject}', articleData.title)
-          .replace('{article_summary}', `The article ${synopsisSummary}`)
+          .replace('{article_summary}', synopsisSummary)
+          .replace('{member_expertise}', memberExpertise)
           .replace('{generated_question}', fallbackQuestion);
         
         return {
           memberId: member.id,
           member: member,
           template: {
-            subject: "TPA Interview Request",
+            subject: "Payments Intelligence feature request",
             body: fallbackBody
           },
           generatedQuestion: fallbackQuestion,
+          memberExpertise: memberExpertise,
           isEdited: false,
           isApproved: false,
           error: memberError.message,
