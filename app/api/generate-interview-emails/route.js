@@ -5,21 +5,19 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const INTERVIEW_EMAIL_TEMPLATE = `Dear **XXX**,
 
-I’m a data journalist at The Payments Association, preparing a feature for Payments Intelligence — our members-only intelligence platform for senior leaders across the payments ecosystem.
+I'm a data journalist at the payments association, preparing a feature for payments intelligence — our members-only intelligence platform for senior leaders across the payments ecosystem.
 
-This piece explores {subject}, examining {article_summary} It will combine our proprietary data with expert commentary from key industry figures.
+This piece explores {subject} — {article_summary}
 
-Given your experience in {member_expertise}, I'd value your perspective on the following question:
+Given your experience in {member_expertise}, I'd value your view on the following question:
 
 {generated_question}
 
-Your response (around 50–100 words) would appear as a pullout quote in the article, alongside your name, title, and company, and will be shared with senior executives, policymakers, and partners across The Payments Association's 250+ member companies, including banks, PSPs, acquirers, fintechs, and law firms.
+Your 50–100-word response would feature as a pull-out quote, with your name, title, and company, shared with executives, policymakers, and partners across 250+ member companies of the payments association.
 
-You can view previous reports and articles here: https://thepaymentsassociation.org/hub/payments-intelligence/
+Read previous reports here: payments intelligence
 
-The deadline for responses is **XXX**
-
-If this topic isn't quite right, I'd be happy to keep you in mind for future opportunities — we regularly feature perspectives on market trends, regulation, and innovation.
+Deadline: **XXX**
 
 Kind regards,`;
 
@@ -82,22 +80,29 @@ export async function POST(request) {
     console.log(`📰 Article: ${articleData.title}`);
     console.log(`👥 Selected members: ${selectedMembers.length}`);
 
-    // STEP 1: Create article summary (1-2 lines that work after "examining")
+    // STEP 1: Create article summary (concise, 15-25 words)
     console.log('\n📝 CREATING ARTICLE SUMMARY...');
-    const summaryPrompt = `Create a concise 1-2 line summary for a professional intelligence report email. This summary will appear after the phrase "This piece explores [article title], examining" — so it should flow naturally from that.
+    const summaryPrompt = `Create a concise summary for a professional intelligence report email. This summary will appear after the article title and a dash (—) in this format: "This piece explores [article title] — [your summary here]"
 
 Original synopsis:
 "${articleData.synopsis}"
 
 Requirements:
-- 1-2 lines maximum (aim for 20-35 words)
-- Should work grammatically after "examining" (e.g., "the regulatory impact on...", "how emerging trends are...", "key data insights revealing...")
+- 15-25 words maximum (aim for clarity and brevity)
+- Should work as a standalone statement after the article title and dash
 - Professional, analytical tone suited for senior executives
-- Focus on what the article examines/analyses/reveals
+- Focus on what the article analyses/reveals/examines
 - Use UK English spelling
-- No full stop at the end (the template adds "It will combine..." after this)
+- Use action words like: analysing, exploring, examining, revealing
+- No full stop at the end
+- Be specific but concise
 
-Return only the summary text that follows "examining", no additional formatting or quotes.`;
+Examples of good summaries:
+- "analysing how emerging regulations are reshaping compliance priorities for UK fintechs"
+- "examining cross-border payment challenges through new market data and regulatory insights"
+- "exploring how AI adoption is transforming fraud prevention strategies across European banks"
+
+Return only the summary text, no additional formatting or quotes.`;
 
     let summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -122,7 +127,7 @@ Return only the summary text that follows "examining", no additional formatting 
     
     let synopsisSummary = summaryData.choices[0].message.content.trim();
     
-    // Remove trailing full stop if present (template will add "It will combine..." after)
+    // Remove trailing full stop if present
     if (synopsisSummary.endsWith('.')) {
       synopsisSummary = synopsisSummary.slice(0, -1);
     }
@@ -138,9 +143,9 @@ Return only the summary text that follows "examining", no additional formatting 
       // Extract member expertise
       let memberExpertise = 'this area';
       if (member.expertise && Array.isArray(member.expertise) && member.expertise.length > 0) {
-        memberExpertise = member.expertise.join(', ');
+        memberExpertise = member.expertise.join(', ').toLowerCase();
       } else if (member.marketSegments && Array.isArray(member.marketSegments) && member.marketSegments.length > 0) {
-        memberExpertise = member.marketSegments.join(', ');
+        memberExpertise = member.marketSegments.join(', ').toLowerCase();
       }
       console.log(`     👤 Expertise: ${memberExpertise}`);
 
@@ -155,11 +160,11 @@ Expert's background:
 - Market focus: ${member.marketSegments?.join(', ') || 'General'}
 - Geographic perspective: ${member.geographicFocus?.join(', ') || 'Global'}
 
-Generate ONE precise, senior-level, strategic question (25-40 words) that:
+Generate ONE precise, senior-level, strategic question (15-25 words maximum) that:
 
-CRITICAL - THOUGHT LEADERSHIP FOCUS:
+CRITICAL - CONCISE THOUGHT LEADERSHIP:
 1. Asks about INDUSTRY-WIDE strategic implications, not company-specific solutions
-2. Encourages high-level analysis suitable for C-suite executives
+2. Must be 15-25 words (brevity is essential for busy executives)
 3. Seeks insights on trends, challenges, or opportunities facing THE SECTOR
 4. Avoids language that would prompt product/service promotion
 5. Uses precise, strategic language appropriate for senior leaders
@@ -170,20 +175,19 @@ The question should:
 - Encourage analytical, objective commentary from a senior strategic perspective
 - Inspire a thoughtful 50-100 word response
 - Use professional, executive-level tone
-- Focus on strategic implications, policy considerations, or market evolution
+- Be direct and concise - no unnecessary words
 
-Examples of GOOD thought leadership questions for senior audiences:
-- "What are the key strategic considerations financial institutions should prioritise as this regulation evolves?"
-- "From a market dynamics perspective, how might this shift reshape competitive positioning over the next 18-24 months?"
-- "What policy implications should industry leaders be considering in response to these developments?"
-- "How should senior executives be thinking about the risk-opportunity balance in this emerging trend?"
+Examples of GOOD concise thought leadership questions:
+- "What strategic investments are needed for the uk to close the A2A adoption gap with europe?" (17 words)
+- "How should senior executives balance innovation speed with regulatory compliance in cross-border payments?" (14 words)
+- "What policy shifts would accelerate open banking adoption among uk SMEs?" (12 words)
 
-Examples of BAD questions (too tactical or sales-focused):
-- "How is your company addressing this challenge?" ❌
-- "What solutions does your organisation offer for this?" ❌
-- "What features should providers implement?" ❌
+Examples of BAD questions:
+- Too long: "What are the key strategic considerations that financial institutions across the UK should prioritise as this regulation continues to evolve?" ❌
+- Sales-focused: "How is your company addressing this challenge?" ❌
+- Too vague: "What do you think about this trend?" ❌
 
-Return ONLY the question text, no preamble or explanation.`;
+Return ONLY the question text, no preamble or explanation. Keep it under 25 words.`;
 
       try {
         let questionResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -196,7 +200,7 @@ Return ONLY the question text, no preamble or explanation.`;
             messages: [
               {
                 role: 'system',
-                content: 'You are an expert journalist who creates precise, strategic questions for senior executives. Your questions inspire industry-level insights and strategic analysis, not promotional responses. You write for C-suite audiences in the payments sector.'
+                content: 'You are an expert journalist who creates precise, concise strategic questions for senior executives. Your questions are always 15-25 words and inspire industry-level insights. You write for C-suite audiences in the payments sector.'
               },
               {
                 role: 'user',
@@ -217,11 +221,11 @@ Return ONLY the question text, no preamble or explanation.`;
         recordUsage(questionData.usage?.total_tokens || 0, questionRateLimitHeaders);
 
         const generatedQuestion = questionData.choices[0].message.content.trim();
-        console.log(`     ✅ Question generated: "${generatedQuestion.substring(0, 80)}..."`);
+        console.log(`     ✅ Question generated: "${generatedQuestion}"`);
 
         // Build the email body with the generated question and member expertise
         const emailBody = INTERVIEW_EMAIL_TEMPLATE
-          .replace('{subject}', articleData.title)
+          .replace('{subject}', articleData.title.toLowerCase())
           .replace('{article_summary}', synopsisSummary)
           .replace('{member_expertise}', memberExpertise)
           .replace('{generated_question}', generatedQuestion);
@@ -230,7 +234,7 @@ Return ONLY the question text, no preamble or explanation.`;
           memberId: member.id,
           member: member,
           template: {
-            subject: "Payments Intelligence feature request",
+            subject: "payments intelligence feature request",
             body: emailBody
           },
           generatedQuestion: generatedQuestion,
@@ -244,10 +248,10 @@ Return ONLY the question text, no preamble or explanation.`;
         console.error(`     ❌ Failed for ${member.company}:`, memberError.message);
         
         // Fallback with generic thought leadership question
-        const fallbackQuestion = `What are the key strategic implications of ${articleData.title.toLowerCase()} for senior leaders in the payments industry over the next 18-24 months?`;
+        const fallbackQuestion = `What are the key strategic implications of ${articleData.title.toLowerCase()} for the uk payments industry?`;
         
         const fallbackBody = INTERVIEW_EMAIL_TEMPLATE
-          .replace('{subject}', articleData.title)
+          .replace('{subject}', articleData.title.toLowerCase())
           .replace('{article_summary}', synopsisSummary)
           .replace('{member_expertise}', memberExpertise)
           .replace('{generated_question}', fallbackQuestion);
@@ -256,7 +260,7 @@ Return ONLY the question text, no preamble or explanation.`;
           memberId: member.id,
           member: member,
           template: {
-            subject: "Payments Intelligence feature request",
+            subject: "payments intelligence feature request",
             body: fallbackBody
           },
           generatedQuestion: fallbackQuestion,
