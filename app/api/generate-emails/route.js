@@ -9,7 +9,9 @@ I'm a data journalist at The Payments Association. I'm writing to offer you the 
 
 {article_summary}
 
-Article commentary is a ~70-word statement included in the 'Industry Voices' section of our articles - along with the commenter's name, job title, and company. These articles are shared with our entire membership and through our social media channels.
+Article commentary is a ~70-word statement included in the 'Industry Voices' section of our articles - along with the commenter's name, job title, and company.
+
+This article will be featured in Payments Intelligence, TPA's member-only publication aimed at senior leaders across our membership base. You can read all reports and articles here: https://thepaymentsassociation.org/hub/payments-intelligence/. The article will also be promoted through our social media channels.
 
 The deadline for commentary is **XXX**
 

@@ -13,7 +13,9 @@ Given your expertise in this area, I'd value your perspective on the following q
 
 * {generated_question}
 
-Your response (~50-100 words) would be featured in the 'Industry Voices' section of the article, alongside your name, job title and company. The article will be shared with our entire membership and promoted through our social media channels.
+Your response (~50-100 words) would be featured in the 'Industry Voices' section of the article, alongside your name, job title and company.
+
+This article will be featured in Payments Intelligence, TPA's member-only publication aimed at senior leaders across our membership base. You can read all reports and articles here: https://thepaymentsassociation.org/hub/payments-intelligence/. The article will also be promoted through our social media channels.
 
 The deadline for responses is **XXX**
 
