@@ -5,19 +5,19 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const INTERVIEW_EMAIL_TEMPLATE = `Hi **XXX**,
 
-I'm a data journalist at The Payments Association. I'm writing to offer you the opportunity to provide expert commentary for my article on {subject}.
+I'm a data journalist at The Payments Association. I'm writing to offer you the opportunity to provide commentary for my article on {subject}.
 
 {article_summary}
 
 Given your expertise in this area, I'd value your perspective on the following question:
 
-**{generated_question}**
+* {generated_question}
 
-Your response (~50-100 words) would be featured in the 'Industry Voices' section of the article, alongside your name, job title and company. The article will be shared with our entire membership of over 400 organisations and promoted through our social media channels.
+Your response (~50-100 words) would be featured in the 'Industry Voices' section of the article, alongside your name, job title and company. The article will be shared with our entire membership and promoted through our social media channels.
 
 The deadline for responses is **XXX**
 
-I'd be happy to provide any additional information or context you might need.
+Spaces are limited, so please let me know if you are interested, as I can pass the opportunity on if this one isn't quite right. I'd be happy to provide any additional information or context you might need.
 
 Many thanks,`;
 
