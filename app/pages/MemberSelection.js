@@ -263,7 +263,7 @@ export default function MemberSelection({
         isVisible={loading}
         title="Finding members you need to contact..."
         subtitle="Identifying the most relevant companies for commentary"
-        forcedDuration={10000}
+        forcedDuration={5000}
       />
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
