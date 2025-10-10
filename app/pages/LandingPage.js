@@ -11,6 +11,8 @@ import {
   Sparkles,
   ArrowRight,
   AlertTriangle,
+  Info,
+  HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,6 +22,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TPAMailLogo = () => (
@@ -43,6 +50,33 @@ const TPAMailLogo = () => (
       </p>
     </div>
   </div>
+);
+
+const InfoPopover = ({ title, children, side = "right" }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button
+        className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 dark:bg-slate-700 hover:bg-[#00DFB8]/20 dark:hover:bg-[#00DFB8]/20 hover:border-[#00DFB8] border border-transparent transition-all duration-200 group"
+        aria-label={`More information about ${title}`}
+      >
+        <Info className="w-3 h-3 text-gray-500 dark:text-gray-400 group-hover:text-[#00B894]" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent
+      side={side}
+      className="w-80 p-4 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border-white/20 dark:border-slate-700/20 shadow-xl"
+    >
+      <div className="space-y-2">
+        <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-[#00B894]" />
+          {title}
+        </h4>
+        <div className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed space-y-2">
+          {children}
+        </div>
+      </div>
+    </PopoverContent>
+  </Popover>
 );
 
 export default function LandingPage({ onContinue, initialData = {} }) {
@@ -145,8 +179,25 @@ export default function LandingPage({ onContinue, initialData = {} }) {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                  Daily Quota Usage
+                  Daily quota usage
                 </span>
+                <InfoPopover title="About quota" side="bottom">
+                  <p>
+                    This tracks your team's daily usage of the AI analysis
+                    system.
+                  </p>
+                  <p className="mt-2">
+                    <strong>Tokens:</strong> Measures text processing capacity
+                    (roughly 750 words = 1,000 tokens)
+                  </p>
+                  <p className="mt-2">
+                    <strong>Requests:</strong> Number of article analyses
+                    performed today
+                  </p>
+                  <p className="mt-2 text-[#00B894] font-medium">
+                    Quota resets daily at midnight UTC
+                  </p>
+                </InfoPopover>
                 {quotaStatus.percentageUsed >= 90 && (
                   <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400" />
                 )}
@@ -189,7 +240,7 @@ export default function LandingPage({ onContinue, initialData = {} }) {
             {!quotaStatus.allowed && (
               <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-xs text-red-700 dark:text-red-400">
-                  <strong>Quota Exceeded:</strong> Daily limit reached. Service
+                  <strong>Quota exceeded:</strong> Daily limit reached. Service
                   will resume tomorrow.
                 </p>
               </div>
@@ -202,9 +253,53 @@ export default function LandingPage({ onContinue, initialData = {} }) {
           {/* Header */}
           <div className="bg-gradient-to-r from-white/80 via-white/60 to-white/80 dark:from-slate-800/80 dark:via-slate-800/60 dark:to-slate-800/80 backdrop-blur-sm border-b border-white/20 dark:border-slate-700/20 p-8 transition-colors duration-300">
             <TPAMailLogo />
-            <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed transition-colors duration-300">
-              Create and manage your PI communications
-            </p>
+            <div className="flex items-start gap-2">
+              <p className="text-base text-gray-600 dark:text-gray-300 leading-relaxed transition-colors duration-300">
+                Title keywords receive 3× weight, synopsis keywords 2×, and full
+                article keywords 1×. Context keywords (title + synopsis) are
+                always prioritised with artificial frequency boosts. Full article
+                content is optional—add it for longer pieces to capture additional
+                discriminating keywords (filtered to &lt;40% member prevalence), or
+                omit for short articles where title + synopsis provide sufficient
+                context.
+              </p>
+              <InfoPopover title="How keyword weighting works" side="left">
+                <div className="space-y-3">
+                  <div>
+                    <p className="font-medium text-[#00B894]">Title (3× weight)</p>
+                    <p className="mt-1">
+                      Highest priority. Keywords in your title define what the
+                      article is about.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-[#00B894]">
+                      Synopsis (2× weight)
+                    </p>
+                    <p className="mt-1">
+                      Medium priority. Provides context and supporting keywords.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-[#00B894]">
+                      Article (1× weight)
+                    </p>
+                    <p className="mt-1">
+                      Standard priority. Captures additional detail and rare
+                      specialist terms.
+                    </p>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+                    <p className="font-medium">Field weights adapt dynamically</p>
+                    <p className="mt-1">
+                      System analyses where keywords appear in member profiles and
+                      adjusts field importance automatically (e.g., regulatory
+                      articles boost regulatoryExpertise field).
+                    </p>
+                  </div>
+                </div>
+              </InfoPopover>
+            </div>
           </div>
 
           {/* Content */}
@@ -216,6 +311,24 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                 className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2"
               >
                 Article title
+                <InfoPopover title="Article title" side="right">
+                  <p>
+                    <strong>Most important field</strong> - receives 3× keyword
+                    weight.
+                  </p>
+                  <p className="mt-2">
+                    Use clear, specific keywords that define your article's main
+                    topic (e.g., "Merchant Regulation Roadmap Q4" or "Cross-Border
+                    Payment Costs 2025").
+                  </p>
+                  <p className="mt-2">
+                    The system extracts keywords like "merchant", "regulation",
+                    "cross-border" and prioritises members with matching expertise.
+                  </p>
+                  <p className="mt-2 text-[#00B894] font-medium">
+                    Required field
+                  </p>
+                </InfoPopover>
                 <div className="h-1 w-1 bg-[#00DFB8] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Label>
               <div className="relative">
@@ -236,7 +349,26 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                 htmlFor="synopsis"
                 className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2"
               >
-                Synopsis
+                Synopsis ~30 detailed words
+                <InfoPopover title="Article synopsis" side="right">
+                  <p>
+                    <strong>Context provider</strong> - receives 2× keyword weight.
+                  </p>
+                  <p className="mt-2">
+                    Write a detailed 30-word summary that explains the article's
+                    focus using specific terminology (e.g., "Analysis of PSD3
+                    regulatory requirements and compliance deadlines for payment
+                    service providers").
+                  </p>
+                  <p className="mt-2">
+                    <strong>Pro tip:</strong> Include domain-specific terms like
+                    "compliance", "acquiring", "CBDC", "AML" - these are highly
+                    discriminating and help match specialist members.
+                  </p>
+                  <p className="mt-2 text-[#00B894] font-medium">
+                    Required field
+                  </p>
+                </InfoPopover>
                 <div className="h-1 w-1 bg-[#00B894] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Label>
               <div className="relative">
@@ -245,7 +377,7 @@ export default function LandingPage({ onContinue, initialData = {} }) {
                   value={synopsis}
                   onChange={(e) => setSynopsis(e.target.value)}
                   placeholder="Enter a brief synopsis of your article..."
-                  className="min-h-[120px] text-base bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border-white/30 dark:border-slate-600/30 rounded-xl shadow-sm hover:bg-white/70 dark:hover:bg-slate-700/70 focus:bg-white/80 dark:focus:bg-slate-700/80 focus:border-[#00DFB8]/30 transition-all duration-300 placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none"
+                  className="h-12 text-base bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm border-white/30 dark:border-slate-600/30 rounded-xl shadow-sm hover:bg-white/70 dark:hover:bg-slate-700/70 focus:bg-white/80 dark:focus:bg-slate-700/80 focus:border-[#00DFB8]/30 transition-all duration-300 placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none"
                   rows={4}
                 />
                 <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-[#00DFB8]/5 to-transparent opacity-0 hover:opacity-100 transition-opacity pointer-events-none"></div>
@@ -256,6 +388,29 @@ export default function LandingPage({ onContinue, initialData = {} }) {
             <div className="space-y-3 group">
               <Label className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 Full article
+                <InfoPopover title="Full article content" side="right">
+                  <p>
+                    <strong>Optional field</strong> - receives 1× keyword weight.
+                  </p>
+                  <p className="mt-2">
+                    <strong>When to add:</strong> For comprehensive articles
+                    (500+ words) where you want to capture specialist terminology
+                    and niche expertise not in title/synopsis.
+                  </p>
+                  <p className="mt-2">
+                    <strong>When to skip:</strong> For short articles, press
+                    releases, or when title + synopsis already contain the key
+                    terms.
+                  </p>
+                  <p className="mt-2">
+                    Only discriminating keywords (appearing in &lt;40% of members)
+                    are extracted from the full article to maintain quality.
+                  </p>
+                  <p className="mt-2 text-gray-500 dark:text-gray-400">
+                    Typical result: 10-15 keywords (title+synopsis only) vs 30-60
+                    keywords (with full article).
+                  </p>
+                </InfoPopover>
                 <div className="h-1 w-1 bg-[#00E6C7] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </Label>
 
