@@ -78,6 +78,8 @@ export async function POST(request) {
 
     console.log('\n📝 INPUT DATA:');
     console.log(`📰 Article: ${articleData.title}`);
+    console.log(`📋 Synopsis: ${articleData.synopsis?.length || 0} characters`);
+    console.log(`📄 Full article: ${articleData.fullArticle?.length || 0} characters`);
     console.log(`👥 Selected members: ${selectedMembers.length}`);
 
     // STEP 1: Create article summary (concise, 15-25 words)
@@ -133,8 +135,22 @@ Return only the summary text, no additional formatting or quotes.`;
     }
     
     console.log(`✅ Summary created: "${synopsisSummary}"`);
+    console.log(`📊 Word count: ${synopsisSummary.split(/\s+/).length} words`);
 
-    // STEP 2: Generate personalised thought leadership questions for each member
+    // STEP 2: Prepare article content for question generation
+    // Use full article if available, otherwise use synopsis
+    // Limit to ~6000 characters (~1500 words) to avoid token limits
+    const articleContent = articleData.fullArticle || articleData.synopsis;
+    const truncatedContent = articleContent.length > 6000 
+      ? articleContent.substring(0, 6000) + '\n\n[Article continues...]'
+      : articleContent;
+
+    console.log(`\n📄 ARTICLE CONTENT FOR QUESTIONS:`);
+    console.log(`   Using: ${articleData.fullArticle ? 'Full article' : 'Synopsis only'}`);
+    console.log(`   Length: ${truncatedContent.length} characters (~${Math.round(truncatedContent.length / 4)} words)`);
+    console.log(`   Truncated: ${articleContent.length > 6000 ? 'Yes' : 'No'}`);
+
+    // STEP 3: Generate personalised thought leadership questions for each member
     console.log('\n🔄 GENERATING PERSONALISED THOUGHT LEADERSHIP QUESTIONS...');
 
     const emailPromises = selectedMembers.map(async (member, index) => {
@@ -149,45 +165,51 @@ Return only the summary text, no additional formatting or quotes.`;
       }
       console.log(`     👤 Expertise: ${memberExpertise}`);
 
-      // Generate thought leadership question based on member's area of expertise
+      // Generate thought leadership question with FULL article context
       const questionPrompt = `You are an expert journalist seeking thought leadership commentary for a payments industry intelligence report aimed at senior executives.
 
-Article title: "${articleData.title}"
-Article synopsis: "${articleData.synopsis}"
+**ARTICLE CONTEXT:**
 
-Expert's background:
+Title: "${articleData.title}"
+
+Synopsis: "${articleData.synopsis}"
+
+Full Article Content:
+"""
+${truncatedContent}
+"""
+
+**EXPERT'S BACKGROUND:**
+- Company: ${member.company}
 - Area of expertise: ${member.expertise?.join(', ') || 'General payments'}
 - Market focus: ${member.marketSegments?.join(', ') || 'General'}
 - Geographic perspective: ${member.geographicFocus?.join(', ') || 'Global'}
+${member.bio ? `- Background: ${member.bio.substring(0, 200)}` : ''}
 
-Generate ONE precise, senior-level, strategic question (15-25 words maximum) that:
+**YOUR TASK:**
+Based on the FULL article content above and this expert's specific background, generate ONE precise, strategic question (15-25 words maximum) that:
 
-CRITICAL - CONCISE THOUGHT LEADERSHIP:
-1. Asks about INDUSTRY-WIDE strategic implications, not company-specific solutions
-2. Must be 15-25 words (brevity is essential for busy executives)
-3. Seeks insights on trends, challenges, or opportunities facing THE SECTOR
-4. Avoids language that would prompt product/service promotion
-5. Uses precise, strategic language appropriate for senior leaders
-6. Focuses on "what should the industry consider" rather than "what does your company offer"
+CRITICAL REQUIREMENTS:
+1. **Reference SPECIFIC content** from the article - cite actual data points, statistics, arguments, or themes mentioned
+2. **Connect to expert's domain** - align the question with their specific expertise area
+3. **Industry-wide strategic focus** - ask about sector implications, not company-specific solutions
+4. **Executive-level language** - use precise, strategic terminology appropriate for C-suite
+5. **Actionable insight** - the question should inspire a thoughtful strategic response
+6. **Concise** - maximum 25 words, be direct and clear
 
-The question should:
-- Be relevant to their area of expertise (but ask about the broader industry, not their company)
-- Encourage analytical, objective commentary from a senior strategic perspective
-- Inspire a thoughtful 50-100 word response
-- Use professional, executive-level tone
-- Be direct and concise - no unnecessary words
+Examples of EXCELLENT questions (note the specificity):
+- "Given the article's data showing 40% of SMEs lack digital payment access, what policy interventions would accelerate UK financial inclusion?"
+- "The article highlights €2.3bn in PSD3 compliance costs - how should mid-tier PSPs prioritise regulatory investment versus innovation?"
+- "With cross-border payment costs cited at 6.5% for remittances, what technical standards would drive industry-wide cost reduction?"
 
-Examples of GOOD concise thought leadership questions:
-- "What strategic investments are needed for the uk to close the A2A adoption gap with europe?" (17 words)
-- "How should senior executives balance innovation speed with regulatory compliance in cross-border payments?" (14 words)
-- "What policy shifts would accelerate open banking adoption among uk SMEs?" (12 words)
+Examples of BAD questions (too generic):
+- "What are your thoughts on the future of payments?" ❌ (no article reference)
+- "How is your company addressing this challenge?" ❌ (company-specific)
+- "What do you think about the trends mentioned in the article?" ❌ (vague)
 
-Examples of BAD questions:
-- Too long: "What are the key strategic considerations that financial institutions across the UK should prioritise as this regulation continues to evolve?" ❌
-- Sales-focused: "How is your company addressing this challenge?" ❌
-- Too vague: "What do you think about this trend?" ❌
+The question MUST reference specific content from the article - data, statistics, arguments, or key themes.
 
-Return ONLY the question text, no preamble or explanation. Keep it under 25 words.`;
+Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
 
       try {
         let questionResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -200,7 +222,7 @@ Return ONLY the question text, no preamble or explanation. Keep it under 25 word
             messages: [
               {
                 role: 'system',
-                content: 'You are an expert journalist who creates precise, concise strategic questions for senior executives. Your questions are always 15-25 words and inspire industry-level insights. You write for C-suite audiences in the payments sector.'
+                content: 'You are an expert journalist who creates precise, data-driven strategic questions for senior executives in the payments sector. Your questions always reference specific article content and inspire industry-level insights. You write concisely - maximum 25 words per question.'
               },
               {
                 role: 'user',
@@ -208,7 +230,8 @@ Return ONLY the question text, no preamble or explanation. Keep it under 25 word
               }
             ],
             model: 'llama-3.3-70b-versatile',
-            temperature: 0.8,
+            temperature: 0.7, // Slightly lower for more focused questions
+            max_tokens: 150, // Limit to ensure concise questions
           })
         });
 
@@ -221,7 +244,11 @@ Return ONLY the question text, no preamble or explanation. Keep it under 25 word
         recordUsage(questionData.usage?.total_tokens || 0, questionRateLimitHeaders);
 
         const generatedQuestion = questionData.choices[0].message.content.trim();
-        console.log(`     ✅ Question generated: "${generatedQuestion}"`);
+        const questionWordCount = generatedQuestion.split(/\s+/).length;
+        
+        console.log(`     ✅ Question generated (${questionWordCount} words)`);
+        console.log(`     📝 "${generatedQuestion}"`);
+        console.log(`     ⚡ Tokens used: ${questionData.usage?.total_tokens || 0}`);
 
         // Build the email body with the generated question and member expertise
         const emailBody = INTERVIEW_EMAIL_TEMPLATE
@@ -247,8 +274,8 @@ Return ONLY the question text, no preamble or explanation. Keep it under 25 word
       } catch (memberError) {
         console.error(`     ❌ Failed for ${member.company}:`, memberError.message);
         
-        // Fallback with generic thought leadership question
-        const fallbackQuestion = `What are the key strategic implications of ${articleData.title.toLowerCase()} for the uk payments industry?`;
+        // Fallback with article-aware generic question
+        const fallbackQuestion = `What strategic implications does ${articleData.title.toLowerCase()} have for the UK payments industry?`;
         
         const fallbackBody = INTERVIEW_EMAIL_TEMPLATE
           .replace('{subject}', articleData.title.toLowerCase())
@@ -281,6 +308,15 @@ Return ONLY the question text, no preamble or explanation. Keep it under 25 word
     console.log(`⏱️ Total time: ${totalProcessingTime}ms`);
     console.log(`✅ Successful: ${generatedEmails.filter(e => !e.error).length}`);
     console.log(`❌ Failed: ${generatedEmails.filter(e => e.error).length}`);
+    console.log(`📊 Total tokens used: ${finalQuota.tokensUsed}`);
+    console.log(`📊 Quota remaining: ${finalQuota.tokensRemaining} tokens (${finalQuota.requestsRemaining} requests)`);
+
+    // Log sample questions for quality check
+    console.log('\n📋 SAMPLE GENERATED QUESTIONS (first 3):');
+    generatedEmails.slice(0, 3).forEach((email, idx) => {
+      console.log(`\n   ${idx + 1}. ${email.member.company}:`);
+      console.log(`      "${email.generatedQuestion}"`);
+    });
 
     return NextResponse.json({ 
       success: true, 
@@ -294,7 +330,9 @@ Return ONLY the question text, no preamble or explanation. Keep it under 25 word
       meta: {
         totalProcessingTime: totalProcessingTime,
         successfulGenerations: generatedEmails.filter(e => !e.error).length,
-        failedGenerations: generatedEmails.filter(e => e.error).length
+        failedGenerations: generatedEmails.filter(e => e.error).length,
+        articleContentUsed: articleData.fullArticle ? 'full' : 'synopsis',
+        articleContentLength: truncatedContent.length
       }
     });
 

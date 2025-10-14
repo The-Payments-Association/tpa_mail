@@ -3,25 +3,23 @@ import { checkQuota, recordUsage, parseRateLimitHeaders } from '../../../lib/quo
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const EMAIL_TEMPLATE = `Hi **XXX**,
+const EMAIL_TEMPLATE = `Dear **XXX**,
 
-I'm a data journalist at The Payments Association. I'm writing to offer you the opportunity to provide commentary for my article on {subject}.
+I'm a data journalist at the payments association, preparing a feature for payments intelligence — our members-only intelligence platform for senior leaders across the payments ecosystem.
 
-{article_summary}
+This piece explores {subject} — {article_summary}
 
-Article commentary is a ~70-word statement included in the 'Industry Voices' section of our articles - along with the commenter's name, job title, and company.
+I'd value your expert commentary on this topic. Your ~70-word statement would feature in the 'industry voices' section, alongside your name, title, and company, shared with executives and partners across 250+ member companies.
 
-This article will be featured in Payments Intelligence, TPA's member-only publication aimed at senior leaders across our membership base. You can read all reports and articles here: https://thepaymentsassociation.org/hub/payments-intelligence/. The article will also be promoted through our social media channels.
+Read previous reports here: https://thepaymentsassociation.org/hub/payments-intelligence/
 
-The deadline for commentary is **XXX**
+Deadline: **XXX**
 
-Let me know if you would like any more information.
-
-Many thanks,`;
+Kind regards,`;
 
 export async function POST(request) {
   const startTime = Date.now();
-  console.log('\n📧 === EMAIL GENERATION STARTED ===');
+  console.log('\n📧 === COMMENTARY EMAIL GENERATION STARTED ===');
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
   try {
@@ -92,19 +90,27 @@ export async function POST(request) {
     console.log(`📋 Original synopsis length: ${articleData.synopsis?.length || 0} characters`);
     console.log(`👥 Selected members: ${selectedMembers.length}`);
 
-    // Create article summary
+    // Create article summary with improved prompt
     console.log('\n📝 CREATING ARTICLE SUMMARY FOR EMAIL...');
-    const summaryPrompt = `Create a concise, direct summary for use in a professional email outreach. The summary should follow the phrase "The article" and be written in a clear, to-the-point tone.
+    const summaryPrompt = `Create a concise summary for a professional intelligence report email. This summary will appear after the article title and a dash (—) in this format: "This piece explores [article title] — [your summary here]"
 
 Original synopsis:
 "${articleData.synopsis}"
 
 Requirements:
-- Maximum 50 words (shorter is better if it captures the key points)
-- Should start naturally after "The article" (e.g., "explores...", "examines...", "analyses...")
-- Direct, professional tone - no fluff
-- Focus on the core insight or value proposition
+- 15-25 words maximum (aim for clarity and brevity)
+- Should work as a standalone statement after the article title and dash
+- Professional, analytical tone suited for senior executives
+- Focus on what the article analyses/reveals/examines
 - Use UK English spelling
+- Use action words like: analysing, exploring, examining, revealing
+- No full stop at the end
+- Be specific but concise
+
+Examples of good summaries:
+- "analysing how emerging regulations are reshaping compliance priorities for UK fintechs"
+- "examining cross-border payment challenges through new market data and regulatory insights"
+- "exploring how AI adoption is transforming fraud prevention strategies across European banks"
 
 Return only the summary text, no additional formatting or quotes.`;
 
@@ -125,7 +131,7 @@ Return only the summary text, no additional formatting or quotes.`;
             }
           ],
           model: 'llama-3.3-70b-versatile',
-          temperature: 0.4
+          temperature: 0.5
         })
       });
     } catch (fetchError) {
@@ -158,14 +164,20 @@ Return only the summary text, no additional formatting or quotes.`;
     
     console.log(`⚡ Summary generation: ${summaryData.usage?.total_tokens || 0} tokens`);
 
-    const synopsisSummary = summaryData.choices[0].message.content.trim();
+    let synopsisSummary = summaryData.choices[0].message.content.trim();
+    
+    // Remove trailing full stop if present
+    if (synopsisSummary.endsWith('.')) {
+      synopsisSummary = synopsisSummary.slice(0, -1);
+    }
+
     const summaryWordCount = synopsisSummary.split(/\s+/).length;
 
     console.log(`✅ Article summary created:`);
     console.log(`📝 Summary: "${synopsisSummary}"`);
     console.log(`📊 Word count: ${summaryWordCount} words`);
 
-    console.log('\n🎯 SELECTED MEMBERS FOR EMAIL GENERATION:');
+    console.log('\n🎯 SELECTED MEMBERS FOR COMMENTARY EMAIL GENERATION:');
     selectedMembers.forEach((member, index) => {
       console.log(`  ${index + 1}. ${member.company || member.name || 'Unknown'}`);
     });
@@ -177,19 +189,20 @@ Return only the summary text, no additional formatting or quotes.`;
       console.log(`\n  📧 ${index + 1}/${selectedMembers.length}: Processing ${member.company || member.name || 'Unknown'}`);
 
       const templateForPrompt = EMAIL_TEMPLATE
-        .replace('{subject}', articleData.title)
+        .replace('{subject}', articleData.title.toLowerCase())
         .replace('{article_summary}', synopsisSummary);
 
-      const userPrompt = `You are generating a professional email. You MUST preserve all line breaks and formatting exactly as shown in the template.
+      const userPrompt = `You are generating a professional commentary request email. You MUST preserve all line breaks and formatting exactly as shown in the template.
 
 CRITICAL INSTRUCTIONS:
 
 1. Use the template EXACTLY as provided below
 2. Preserve ALL line breaks (empty lines between paragraphs)
-3. Keep "Hi **XXX**," exactly as written
-4. Keep "The deadline for commentary is **XXX**" exactly as written
+3. Keep "Dear **XXX**," exactly as written
+4. Keep "Deadline: **XXX**" exactly as written
 5. DO NOT add any extra text or sentences
 6. DO NOT modify the structure or spacing
+7. Keep all branding lowercase: "payments association", "payments intelligence"
 
 When returning JSON, use \\n for line breaks to preserve formatting.
 
@@ -198,7 +211,7 @@ When returning JSON, use \\n for line breaks to preserve formatting.
 ${templateForPrompt}
 
 Return this exact text as JSON with proper line break encoding:
-{"subject": "TPA Request", "body": "email with \\n for line breaks"}
+{"subject": "payments intelligence commentary request", "body": "email with \\n for line breaks"}
 
 REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
 
@@ -262,7 +275,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
           throw new Error('Failed to parse email response as JSON');
         }
         
-        emailContent.subject = "TPA Request";
+        emailContent.subject = "payments intelligence commentary request";
         
         if (!emailContent.body) {
           throw new Error('Email body is missing from response');
@@ -283,7 +296,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
           memberId: member.id,
           member: member,
           template: {
-            subject: "TPA Request",
+            subject: "payments intelligence commentary request",
             body: emailContent.body
           },
           isEdited: false,
@@ -298,7 +311,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
         console.error(`     📝 Error: ${memberError.message}`);
         
         const fallbackBody = EMAIL_TEMPLATE
-          .replace('{subject}', articleData.title)
+          .replace('{subject}', articleData.title.toLowerCase())
           .replace('{article_summary}', synopsisSummary);
         
         console.log('     🔄 Using fallback template with preserved line breaks');
@@ -307,7 +320,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
           memberId: member.id,
           member: member,
           template: {
-            subject: "TPA Request",
+            subject: "payments intelligence commentary request",
             body: fallbackBody
           },
           isEdited: false,
@@ -327,7 +340,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
     // Get final quota status
     const finalQuota = checkQuota();
     
-    console.log('\n📊 EMAIL GENERATION SUMMARY:');
+    console.log('\n📊 COMMENTARY EMAIL GENERATION SUMMARY:');
     console.log(`⏱️ Total processing time: ${totalProcessingTime}ms`);
     console.log(`✅ Successful generations: ${generatedEmails.filter(e => !e.error).length}`);
     console.log(`❌ Failed generations: ${generatedEmails.filter(e => e.error).length}`);
@@ -338,8 +351,8 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
     ).length;
     console.log(`📐 Emails with preserved line breaks: ${emailsWithLineBreaks}/${generatedEmails.length}`);
 
-    console.log('\n🎉 EMAIL GENERATION COMPLETE');
-    console.log('📧 === EMAIL GENERATION FINISHED ===\n');
+    console.log('\n🎉 COMMENTARY EMAIL GENERATION COMPLETE');
+    console.log('📧 === COMMENTARY EMAIL GENERATION FINISHED ===\n');
 
     return NextResponse.json({ 
       success: true, 
@@ -359,12 +372,12 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
 
   } catch (error) {
     const totalProcessingTime = Date.now() - startTime;
-    console.error('\n❌ EMAIL GENERATION ERROR:');
+    console.error('\n❌ COMMENTARY EMAIL GENERATION ERROR:');
     console.error(`⏱️ Failed after: ${totalProcessingTime}ms`);
     console.error(`🚨 Error type: ${error.constructor.name}`);
     console.error(`📝 Error message: ${error.message}`);
     console.error(`📍 Stack trace: ${error.stack}`);
-    console.log('📧 === EMAIL GENERATION FAILED ===\n');
+    console.log('📧 === COMMENTARY EMAIL GENERATION FAILED ===\n');
     
     return NextResponse.json({ 
       success: false, 

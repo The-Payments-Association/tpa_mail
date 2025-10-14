@@ -1,11 +1,5 @@
 Need to make the questions creator far better with the refinded context maybe 
 give it mroe context in some way so we dont get generic questions comming out like we do at the moment becuase the context is so condenced
 
-
-also update the non question flow to make it follow the udpated template from benjamin
-
-also look at the questioning logis to see if for the non question template the same clustering aplies
-
-
 Qurated Network (oct) 
 Persici  (Sept)
