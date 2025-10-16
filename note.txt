@@ -1,4 +1,5 @@
-REfind the question Genoration logic so it has mroe context...
+Add the rest of the membership DB
+
 
 Qurated Network (oct) 
 Persici  (Sept)
