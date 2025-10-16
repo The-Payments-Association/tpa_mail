@@ -82,29 +82,39 @@ export async function POST(request) {
     console.log(`📄 Full article: ${articleData.fullArticle?.length || 0} characters`);
     console.log(`👥 Selected members: ${selectedMembers.length}`);
 
-    // STEP 1: Create article summary (concise, 15-25 words)
+    // STEP 1: Create IMPROVED article summary
     console.log('\n📝 CREATING ARTICLE SUMMARY...');
-    const summaryPrompt = `Create a concise summary for a professional intelligence report email. This summary will appear after the article title and a dash (—) in this format: "This piece explores [article title] — [your summary here]"
+    const summaryPrompt = `You are creating a flowing sentence completion for an email. The sentence starts with:
+"This piece explores ${articleData.title.toLowerCase()} — "
 
-Original synopsis:
+Your task is to complete this sentence with a summary that:
+1. Does NOT repeat the title or use words from the title
+2. Flows naturally after the dash
+3. Uses different verbs than "exploring" or "examining"
+4. Creates a smooth, professional sentence
+
+Original synopsis to summarise:
 "${articleData.synopsis}"
 
 Requirements:
-- 15-25 words maximum (aim for clarity and brevity)
-- Should work as a standalone statement after the article title and dash
-- Professional, analytical tone suited for senior executives
-- Focus on what the article analyses/reveals/examines
-- Use UK English spelling
-- Use action words like: analysing, exploring, examining, revealing
+- 15-25 words after the dash
+- Use verbs like: revealing, uncovering, assessing, highlighting, demonstrating, analysing, tracking, mapping
+- Focus on the OUTCOME or INSIGHT, not the process
+- UK English spelling
 - No full stop at the end
-- Be specific but concise
+- Make it flow as ONE natural sentence with the title
 
-Examples of good summaries:
-- "analysing how emerging regulations are reshaping compliance priorities for UK fintechs"
-- "examining cross-border payment challenges through new market data and regulatory insights"
-- "exploring how AI adoption is transforming fraud prevention strategies across European banks"
+GOOD examples (notice how they flow):
+- Title: "Digital Payment Trends 2025" → "revealing how embedded finance and instant payments are reshaping consumer expectations across Europe"
+- Title: "Merchant Regulatory Roadmap Q4" → "highlighting critical compliance deadlines that will determine market winners and losers through 2027"
+- Title: "Open Banking Evolution" → "tracking the shift from compliance-driven APIs to commercial premium services generating new revenue"
 
-Return only the summary text, no additional formatting or quotes.`;
+BAD examples (avoid these patterns):
+- "examining regulatory convergence" (too generic, uses 'examining')
+- "exploring how regulations impact merchants" (repeats 'exploring')
+- "looking at compliance challenges" (weak verb)
+
+Return ONLY the text that comes after the dash. Do not include the title or the dash itself.`;
 
     let summaryResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -115,7 +125,7 @@ Return only the summary text, no additional formatting or quotes.`;
       body: JSON.stringify({
         messages: [{ role: 'user', content: summaryPrompt }],
         model: 'llama-3.3-70b-versatile',
-        temperature: 0.5
+        temperature: 0.7  // Slightly higher for more creative summaries
       })
     });
 
@@ -134,23 +144,28 @@ Return only the summary text, no additional formatting or quotes.`;
       synopsisSummary = synopsisSummary.slice(0, -1);
     }
     
+    // Ensure it doesn't start with examining/exploring
+    if (synopsisSummary.toLowerCase().startsWith('examining') || 
+        synopsisSummary.toLowerCase().startsWith('exploring')) {
+      synopsisSummary = synopsisSummary.replace(/^(examining|exploring)/i, 'revealing');
+    }
+    
     console.log(`✅ Summary created: "${synopsisSummary}"`);
+    console.log(`📊 Full sentence: "This piece explores ${articleData.title.toLowerCase()} — ${synopsisSummary}"`);
     console.log(`📊 Word count: ${synopsisSummary.split(/\s+/).length} words`);
 
     // STEP 2: Prepare article content for question generation
-    // Use full article if available, otherwise use synopsis
-    // Limit to ~6000 characters (~1500 words) to avoid token limits
     const articleContent = articleData.fullArticle || articleData.synopsis;
-    const truncatedContent = articleContent.length > 6000 
-      ? articleContent.substring(0, 6000) + '\n\n[Article continues...]'
+    const truncatedContent = articleContent.length > 12000
+      ? articleContent.substring(0, 12000) + '\n\n[Article continues...]'
       : articleContent;
 
     console.log(`\n📄 ARTICLE CONTENT FOR QUESTIONS:`);
     console.log(`   Using: ${articleData.fullArticle ? 'Full article' : 'Synopsis only'}`);
     console.log(`   Length: ${truncatedContent.length} characters (~${Math.round(truncatedContent.length / 4)} words)`);
-    console.log(`   Truncated: ${articleContent.length > 6000 ? 'Yes' : 'No'}`);
+    console.log(`   Truncated: ${articleContent.length > 12000 ? 'Yes' : 'No'}`);
 
-    // STEP 3: Generate personalised thought leadership questions for each member
+    // STEP 3: Generate personalised thought leadership questions
     console.log('\n🔄 GENERATING PERSONALISED THOUGHT LEADERSHIP QUESTIONS...');
 
     const emailPromises = selectedMembers.map(async (member, index) => {
@@ -165,51 +180,55 @@ Return only the summary text, no additional formatting or quotes.`;
       }
       console.log(`     👤 Expertise: ${memberExpertise}`);
 
-      // Generate thought leadership question with FULL article context
-      const questionPrompt = `You are an expert journalist seeking thought leadership commentary for a payments industry intelligence report aimed at senior executives.
+      // ANTI-HALLUCINATION PROMPT
+      const questionPrompt = `You are an expert journalist seeking thought leadership commentary for a payments industry intelligence report.
 
-**ARTICLE CONTEXT:**
+⚠️ CRITICAL INSTRUCTION: You MUST ONLY use information explicitly stated in the article below. DO NOT add any external knowledge, statistics, dates, or regulations not mentioned in the provided text. If you cannot find specific details in the article, DO NOT make them up.
+
+**ARTICLE CONTENT (ONLY use information from this text):**
 
 Title: "${articleData.title}"
 
 Synopsis: "${articleData.synopsis}"
 
-Full Article Content:
+Full Article:
 """
 ${truncatedContent}
 """
 
 **EXPERT'S BACKGROUND:**
 - Company: ${member.company}
-- Area of expertise: ${member.expertise?.join(', ') || 'General payments'}
-- Market focus: ${member.marketSegments?.join(', ') || 'General'}
-- Geographic perspective: ${member.geographicFocus?.join(', ') || 'Global'}
-${member.bio ? `- Background: ${member.bio.substring(0, 200)}` : ''}
+- Expertise: ${member.expertise?.join(', ') || 'General payments'}
 
 **YOUR TASK:**
-Based on the FULL article content above and this expert's specific background, generate ONE precise, strategic question (15-25 words maximum) that:
+Generate ONE strategic question (20-35 words) following these STRICT rules:
 
-CRITICAL REQUIREMENTS:
-1. **Reference SPECIFIC content** from the article - cite actual data points, statistics, arguments, or themes mentioned
-2. **Connect to expert's domain** - align the question with their specific expertise area
-3. **Industry-wide strategic focus** - ask about sector implications, not company-specific solutions
-4. **Executive-level language** - use precise, strategic terminology appropriate for C-suite
-5. **Actionable insight** - the question should inspire a thoughtful strategic response
-6. **Concise** - maximum 25 words, be direct and clear
+MANDATORY REQUIREMENTS:
+1. ✅ ONLY reference facts, dates, statistics, or regulations EXPLICITLY mentioned in the article above
+2. ❌ DO NOT add any information not in the provided text
+3. ❌ DO NOT mention specific percentages unless they appear in the article
+4. ❌ DO NOT mention specific dates/years unless they appear in the article  
+5. ❌ DO NOT name regulations (PSD3, ISO 20022, etc.) unless explicitly named in the article
 
-Examples of EXCELLENT questions (note the specificity):
-- "Given the article's data showing 40% of SMEs lack digital payment access, what policy interventions would accelerate UK financial inclusion?"
-- "The article highlights €2.3bn in PSD3 compliance costs - how should mid-tier PSPs prioritise regulatory investment versus innovation?"
-- "With cross-border payment costs cited at 6.5% for remittances, what technical standards would drive industry-wide cost reduction?"
+QUESTION CONSTRUCTION:
+- If the article mentions "regulatory convergence" → use that phrase
+- If the article mentions "2027" → you can use 2027
+- If the article does NOT mention "€2.3bn" → do NOT use that figure
+- If the article does NOT mention "ISO 20022" → do NOT reference it
 
-Examples of BAD questions (too generic):
-- "What are your thoughts on the future of payments?" ❌ (no article reference)
-- "How is your company addressing this challenge?" ❌ (company-specific)
-- "What do you think about the trends mentioned in the article?" ❌ (vague)
+GOOD PATTERNS (using only article content):
+- "Given [concept from article], what [strategic implication] for [stakeholder group]?"
+- "How might [trend mentioned in article] reshape [market dynamic]?"
+- "Where does [challenge from article] create [opportunity/risk]?"
 
-The question MUST reference specific content from the article - data, statistics, arguments, or key themes.
+BAD PATTERNS (avoid these):
+- Making up statistics: "With costs at £2bn..." (unless article states this)
+- Adding timelines: "By Q3 2026..." (unless article states this)
+- Naming unnamed items: "PSD3 and FIDA..." (unless article names these)
 
-Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
+VALIDATION CHECK: Before returning your question, verify that EVERY specific claim in your question appears in the article text above.
+
+Return ONLY the question text. Maximum 35 words.`;
 
       try {
         let questionResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -222,7 +241,7 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
             messages: [
               {
                 role: 'system',
-                content: 'You are an expert journalist who creates precise, data-driven strategic questions for senior executives in the payments sector. Your questions always reference specific article content and inspire industry-level insights. You write concisely - maximum 25 words per question.'
+                content: 'You create strategic questions using ONLY information explicitly provided in the article text. You NEVER add external knowledge or make up statistics, dates, or regulation names not in the source material.'
               },
               {
                 role: 'user',
@@ -230,8 +249,8 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
               }
             ],
             model: 'llama-3.3-70b-versatile',
-            temperature: 0.7, // Slightly lower for more focused questions
-            max_tokens: 150, // Limit to ensure concise questions
+            temperature: 0.6,
+            max_tokens: 200,
           })
         });
 
@@ -243,14 +262,63 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
         const questionData = await questionResponse.json();
         recordUsage(questionData.usage?.total_tokens || 0, questionRateLimitHeaders);
 
-        const generatedQuestion = questionData.choices[0].message.content.trim();
+        let generatedQuestion = questionData.choices[0].message.content.trim();
         const questionWordCount = generatedQuestion.split(/\s+/).length;
+        
+        // ENHANCED VALIDATION to catch potential hallucinations
+        const suspiciousPatterns = [
+          /€[\d,]+bn?/,  // Specific euro amounts
+          /£[\d,]+bn?/,  // Specific pound amounts
+          /\$[\d,]+bn?/, // Specific dollar amounts
+          /\d{1,2}%/,    // Specific percentages
+          /Q[1-4]\s*\d{4}/, // Specific quarters
+          /[A-Z]{3,}\d?(?:\s|$)/, // Acronyms that might be made up
+        ];
+        
+        // Check if question contains suspicious specific data
+        let mightBeHallucinated = false;
+        for (const pattern of suspiciousPatterns) {
+          if (pattern.test(generatedQuestion)) {
+            // Check if this specific data appears in the article
+            const match = generatedQuestion.match(pattern)[0];
+            if (!truncatedContent.includes(match)) {
+              console.log(`     ⚠️ Potential hallucination detected: "${match}" not found in article`);
+              mightBeHallucinated = true;
+              break;
+            }
+          }
+        }
         
         console.log(`     ✅ Question generated (${questionWordCount} words)`);
         console.log(`     📝 "${generatedQuestion}"`);
         console.log(`     ⚡ Tokens used: ${questionData.usage?.total_tokens || 0}`);
 
-        // Build the email body with the generated question and member expertise
+        // SAFER FALLBACK if hallucination detected or question is generic
+        if (mightBeHallucinated || generatedQuestion.toLowerCase().includes('how will')) {
+          console.log(`     ⚠️ Using safer, article-agnostic fallback`);
+          
+          // Create safe fallbacks that don't require specific article details
+          const safeFallbacks = [
+            "Given the regulatory changes outlined, which business models face the greatest transformation pressure?",
+            "What strategic opportunities emerge from the convergence of compliance requirements described?",
+            "Where do you see the most significant operational challenges in the developments outlined?",
+            "Which market segments will see the greatest competitive shifts from these changes?",
+            "How might smaller players differentiate themselves as these requirements converge?"
+          ];
+          
+          // Pick a fallback based on member expertise
+          if (member.expertise?.some(e => e.toLowerCase().includes('regulation'))) {
+            generatedQuestion = safeFallbacks[0];
+          } else if (member.expertise?.some(e => e.toLowerCase().includes('strateg'))) {
+            generatedQuestion = safeFallbacks[1];
+          } else {
+            generatedQuestion = safeFallbacks[Math.floor(Math.random() * safeFallbacks.length)];
+          }
+          
+          console.log(`     🔄 Applied safe fallback question`);
+        }
+
+        // Build the email body
         const emailBody = INTERVIEW_EMAIL_TEMPLATE
           .replace('{subject}', articleData.title.toLowerCase())
           .replace('{article_summary}', synopsisSummary)
@@ -268,14 +336,20 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
           memberExpertise: memberExpertise,
           isEdited: false,
           isApproved: false,
-          synopsisSummary: synopsisSummary
+          synopsisSummary: synopsisSummary,
+          questionQuality: {
+            wordCount: questionWordCount,
+            mightBeHallucinated: mightBeHallucinated
+          }
         };
 
       } catch (memberError) {
         console.error(`     ❌ Failed for ${member.company}:`, memberError.message);
         
-        // Fallback with article-aware generic question
-        const fallbackQuestion = `What strategic implications does ${articleData.title.toLowerCase()} have for the UK payments industry?`;
+        // Safe, generic fallback
+        const fallbackQuestion = "What strategic implications do you see from the regulatory convergence outlined in this analysis?";
+        
+        console.log(`     🔄 Using safe fallback: "${fallbackQuestion}"`);
         
         const fallbackBody = INTERVIEW_EMAIL_TEMPLATE
           .replace('{subject}', articleData.title.toLowerCase())
@@ -295,7 +369,8 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
           isEdited: false,
           isApproved: false,
           error: memberError.message,
-          synopsisSummary: synopsisSummary
+          synopsisSummary: synopsisSummary,
+          isFallback: true
         };
       }
     });
@@ -304,10 +379,19 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
     const totalProcessingTime = Date.now() - startTime;
     const finalQuota = checkQuota();
     
+    // Calculate quality metrics
+    const possibleHallucinations = generatedEmails.filter(e => 
+      e.questionQuality?.mightBeHallucinated
+    ).length;
+    
+    const fallbackQuestions = generatedEmails.filter(e => e.isFallback).length;
+    
     console.log('\n📊 INTERVIEW EMAIL GENERATION SUMMARY:');
     console.log(`⏱️ Total time: ${totalProcessingTime}ms`);
     console.log(`✅ Successful: ${generatedEmails.filter(e => !e.error).length}`);
     console.log(`❌ Failed: ${generatedEmails.filter(e => e.error).length}`);
+    console.log(`⚠️ Possible hallucinations caught: ${possibleHallucinations}`);
+    console.log(`🔄 Fallback questions used: ${fallbackQuestions}`);
     console.log(`📊 Total tokens used: ${finalQuota.tokensUsed}`);
     console.log(`📊 Quota remaining: ${finalQuota.tokensRemaining} tokens (${finalQuota.requestsRemaining} requests)`);
 
@@ -316,6 +400,9 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
     generatedEmails.slice(0, 3).forEach((email, idx) => {
       console.log(`\n   ${idx + 1}. ${email.member.company}:`);
       console.log(`      "${email.generatedQuestion}"`);
+      if (email.questionQuality) {
+        console.log(`      Quality: ${email.questionQuality.mightBeHallucinated ? '⚠️ May contain hallucination' : '✅ Clean'}`);
+      }
     });
 
     return NextResponse.json({ 
@@ -332,7 +419,9 @@ Return ONLY the question text, no preamble or explanation. Maximum 25 words.`;
         successfulGenerations: generatedEmails.filter(e => !e.error).length,
         failedGenerations: generatedEmails.filter(e => e.error).length,
         articleContentUsed: articleData.fullArticle ? 'full' : 'synopsis',
-        articleContentLength: truncatedContent.length
+        articleContentLength: truncatedContent.length,
+        possibleHallucinations: possibleHallucinations,
+        fallbackQuestions: fallbackQuestions
       }
     });
 
