@@ -3,8 +3,8 @@ import { getQuotaStatus } from '@/lib/quotaTracker';
 
 export async function GET() {
   try {
-    const status = getQuotaStatus();
-    
+  const status = await getQuotaStatus();
+      
     return NextResponse.json({
       success: true,
       quota: status

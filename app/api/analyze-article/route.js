@@ -454,8 +454,8 @@ export async function POST(request) {
     }
 
     // CHECK QUOTA SECOND
-    const quotaStatus = checkQuota();
-    
+  const quotaStatus = await checkQuota();
+
     if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
       console.error(`📊 Tokens used: ${quotaStatus.tokensUsed}/${quotaStatus.tokensUsed + quotaStatus.tokensRemaining}`);
@@ -628,8 +628,8 @@ Rank the TOP 10 most relevant companies based on:
 
     // RECORD USAGE WITH HEADERS
     const tokensUsed = responseData.usage?.total_tokens || 0;
-    const updatedQuota = recordUsage(tokensUsed, rateLimitHeaders);
-
+  const updatedQuota = await recordUsage(tokensUsed, rateLimitHeaders);
+  
     console.log('\n✅ GROQ RESPONSE RECEIVED:');
     const responseContent = responseData.choices[0].message.content;
     console.log(`📏 Response length: ${responseContent.length} characters`);

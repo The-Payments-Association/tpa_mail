@@ -39,8 +39,7 @@ export async function POST(request) {
     }
 
     // CHECK QUOTA
-    const quotaStatus = checkQuota();
-    if (!quotaStatus.allowed) {
+  const quotaStatus = await checkQuota();    if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
       return NextResponse.json({ 
         success: false, 
@@ -135,8 +134,7 @@ Return ONLY the text that comes after the dash. Do not include the title or the 
 
     const summaryRateLimitHeaders = parseRateLimitHeaders(summaryResponse.headers);
     const summaryData = await summaryResponse.json();
-    recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);
-    
+  await recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);    
     let synopsisSummary = summaryData.choices[0].message.content.trim();
     
     // Remove trailing full stop if present
@@ -260,8 +258,7 @@ Return ONLY the question text. Maximum 35 words.`;
 
         const questionRateLimitHeaders = parseRateLimitHeaders(questionResponse.headers);
         const questionData = await questionResponse.json();
-        recordUsage(questionData.usage?.total_tokens || 0, questionRateLimitHeaders);
-
+  await recordUsage(questionData.usage?.total_tokens || 0, questionRateLimitHeaders);
         let generatedQuestion = questionData.choices[0].message.content.trim();
         const questionWordCount = generatedQuestion.split(/\s+/).length;
         
@@ -377,8 +374,7 @@ Return ONLY the question text. Maximum 35 words.`;
 
     const generatedEmails = await Promise.all(emailPromises);
     const totalProcessingTime = Date.now() - startTime;
-    const finalQuota = checkQuota();
-    
+  const finalQuota = await checkQuota();    
     // Calculate quality metrics
     const possibleHallucinations = generatedEmails.filter(e => 
       e.questionQuality?.mightBeHallucinated

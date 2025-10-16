@@ -37,8 +37,8 @@ export async function POST(request) {
     }
 
     // CHECK QUOTA SECOND
-    const quotaStatus = checkQuota();
-    
+  const quotaStatus = await checkQuota();
+
     if (!quotaStatus.allowed) {
       console.error('\n❌ QUOTA EXCEEDED');
       console.error(`📊 Tokens used: ${quotaStatus.tokensUsed}`);
@@ -160,8 +160,7 @@ Return only the summary text, no additional formatting or quotes.`;
       throw new Error('Invalid response format from Groq API for summary generation');
     }
     
-    recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);
-    
+  await recordUsage(summaryData.usage?.total_tokens || 0, summaryRateLimitHeaders);    
     console.log(`⚡ Summary generation: ${summaryData.usage?.total_tokens || 0} tokens`);
 
     let synopsisSummary = summaryData.choices[0].message.content.trim();
@@ -260,8 +259,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
           throw new Error('Invalid response format from Groq API');
         }
         
-        recordUsage(emailData.usage?.total_tokens || 0, emailRateLimitHeaders);
-
+  await recordUsage(emailData.usage?.total_tokens || 0, emailRateLimitHeaders);
         const memberProcessingTime = Date.now() - memberStartTime;
         console.log(`     ✅ Response received (${memberProcessingTime}ms)`);
         console.log(`     ⚡ Tokens used: ${emailData.usage?.total_tokens || 0}`);
@@ -338,8 +336,7 @@ REMEMBER: Use \\n in the JSON string to preserve line breaks.`;
     const totalProcessingTime = Date.now() - startTime;
     
     // Get final quota status
-    const finalQuota = checkQuota();
-    
+  const finalQuota = await checkQuota();    
     console.log('\n📊 COMMENTARY EMAIL GENERATION SUMMARY:');
     console.log(`⏱️ Total processing time: ${totalProcessingTime}ms`);
     console.log(`✅ Successful generations: ${generatedEmails.filter(e => !e.error).length}`);
